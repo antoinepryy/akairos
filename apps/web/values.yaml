@@ -2,8 +2,8 @@
 replicas: 3
 
 # Shown on the page. Change version + color for a visible rolling update.
-version: v1
-color: "#2563eb"
+version: v2
+color: "#16a34a"
 
 image: nginx:1.30-alpine
 
