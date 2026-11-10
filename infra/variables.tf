@@ -33,10 +33,10 @@ variable "flavor_name" {
   default     = "d2-2"
 }
 
-variable "image_prefix" {
-  description = "Instances boot on the newest image whose name starts with this."
+variable "image_name" {
+  description = "Exact image name the instances boot on (newest one if several)."
   type        = string
-  default     = "Debian 12"
+  default     = "Debian 13"
 }
 
 variable "admin_cidr" {
@@ -67,7 +67,7 @@ variable "vlan_id" {
   default     = 42
 }
 
-# Optional pins. Null = looked up from flavor_name / image_prefix / "small".
+# Optional pins. Null = looked up from flavor_name / image_name / "small".
 variable "flavor_id" {
   type    = string
   default = null

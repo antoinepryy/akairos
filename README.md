@@ -29,7 +29,7 @@ crée avant la séance, on détruit après, rien ne tourne entre deux formations
 | Passerelle | `akairos-gw` (modèle S) | Sortie Internet (SNAT) des instances privées, porte l'IP du LB |
 | Bastion | `akairos-bastion` | Seul point d'entrée SSH |
 | Load balancer | `akairos-lb` (Octavia, small) | HTTP:80 public, round robin, health check `/health` |
-| Instances | `akairos-app-N` (d2-2, Debian 12) | nginx, page avec le nom de l'instance, **sans IP publique** |
+| Instances | `akairos-app-N` (d2-2, Debian 13) | nginx, page avec le nom de l'instance, **sans IP publique** |
 | Pare-feu | security groups `akairos-bastion-sg`, `akairos-app-sg` | 22 depuis l'admin vers le bastion ; 80 depuis le sous-réseau et 22 depuis le bastion vers les app |
 
 ## Prérequis
@@ -85,4 +85,4 @@ Le script liste tout ce qui commence par `akairos-` (et toute IP flottante orphe
 - **Le vRack n'est pas géré ici** : Terraform ne commande ni ne détache de vRack.
 - **Load balancer** : il utilise la ressource `ovh_cloud_project_loadbalancer` (marquée dépréciée) parce que la nouvelle `ovh_cloud_loadbalancer` ne sait pas encore lui attacher une IP flottante (provider 2.24). Le reste utilise la nouvelle famille `ovh_cloud_*`.
 - **Tests hors ligne** (aucune ressource créée) : `terraform -chdir=infra test`.
-- **Épingler une image ou un gabarit** : `-var image_id=...`, `-var flavor_name=b3-8`, `-var region=SBG5`.
+- **Épingler une image ou un gabarit** : `-var image_name="Debian 13 - UEFI"`, `-var image_id=...`, `-var flavor_name=b3-8`, `-var region=SBG5`.

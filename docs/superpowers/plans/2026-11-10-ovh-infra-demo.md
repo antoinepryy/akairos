@@ -76,7 +76,7 @@
 
 **Interfaces:**
 - Consumes: Task 2 network/subnet/gateway ids, Task 1 locals.
-- Produces: `ovh_cloud_project_ssh_key.this` (`name = "${var.prefix}-key"`), `ovh_cloud_project_instance.bastion`, `ovh_cloud_project_instance.app` (`count = var.instance_count`), data sources `ovh_cloud_project_flavors` (filter `var.flavor_name`) and `ovh_cloud_project_images` (Linux, pick the newest image whose name starts with `"Debian 12"`).
+- Produces: `ovh_cloud_project_ssh_key.this` (`name = "${var.prefix}-key"`), `ovh_cloud_project_instance.bastion`, `ovh_cloud_project_instance.app` (`count = var.instance_count`), data sources `ovh_cloud_project_flavors` (filter `var.flavor_name`) and `ovh_cloud_project_images` (Linux, pick the newest image named exactly `"Debian 13"`).
 - `app.yaml.tftpl(name)`: installs nginx; writes `/var/www/html/index.html` at boot with hostname, private IP (`hostname -I`), boot time, and a distinct background color derived from the hostname; `/health` returns `200 ok` (nginx `location = /health`).
 - `bastion.yaml.tftpl(admin_cidr)`: `ssh_pwauth: false`, installs `ufw`, `default deny incoming`, allow `22/tcp from ${admin_cidr}` on the public interface, allow `22/tcp` from `var.subnet_cidr`, enable; `unattended-upgrades`.
 - Bastion: `network { public = true; private { network {id, subnet_id}; ip = local.bastion_ip; gateway { id } } }`. App: same `private` block with `ip = local.app_ips[count.index]`, **no** `public`, no floating IP.
