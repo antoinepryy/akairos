@@ -23,6 +23,8 @@ crée avant la séance, on détruit après, rien ne tourne entre deux formations
 └──────────────────────────────────────────────────────────┘
 ```
 
+Schéma détaillé : [`docs/architecture.html`](docs/architecture.html) (à ouvrir dans un navigateur).
+
 | Brique | Ressource | Rôle |
 |---|---|---|
 | Réseau privé | `akairos-net` (VLAN 42) + `akairos-subnet` | Relie les machines hors d'Internet |
