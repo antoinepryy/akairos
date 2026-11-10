@@ -1,7 +1,7 @@
 locals {
   allow_all_egress = [
-    { direction = "egress", ethernet_type = "IPv4", description = "all outbound IPv4" },
-    { direction = "egress", ethernet_type = "IPv6", description = "all outbound IPv6" },
+    { direction = "EGRESS", ethernet_type = "IPV4", description = "all outbound IPv4" },
+    { direction = "EGRESS", ethernet_type = "IPV6", description = "all outbound IPv6" },
   ]
 }
 
@@ -13,9 +13,9 @@ resource "ovh_cloud_security_group" "bastion" {
   description  = "SSH from admin_cidr only"
 
   rule = concat(local.allow_all_egress, [{
-    direction        = "ingress"
-    ethernet_type    = "IPv4"
-    protocol         = "tcp"
+    direction        = "INGRESS"
+    ethernet_type    = "IPV4"
+    protocol         = "TCP"
     port_range_min   = 22
     port_range_max   = 22
     remote_ip_prefix = var.admin_cidr
@@ -32,18 +32,18 @@ resource "ovh_cloud_security_group" "app" {
 
   rule = concat(local.allow_all_egress, [
     {
-      direction        = "ingress"
-      ethernet_type    = "IPv4"
-      protocol         = "tcp"
+      direction        = "INGRESS"
+      ethernet_type    = "IPV4"
+      protocol         = "TCP"
       port_range_min   = 80
       port_range_max   = 80
       remote_ip_prefix = var.subnet_cidr
       description      = "HTTP from load balancer subnet"
     },
     {
-      direction       = "ingress"
-      ethernet_type   = "IPv4"
-      protocol        = "tcp"
+      direction       = "INGRESS"
+      ethernet_type   = "IPV4"
+      protocol        = "TCP"
       port_range_min  = 22
       port_range_max  = 22
       remote_group_id = ovh_cloud_security_group.bastion.id

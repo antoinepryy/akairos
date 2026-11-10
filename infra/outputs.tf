@@ -1,18 +1,11 @@
-locals {
-  bastion_public_ip = try([
-    for a in flatten([for n in ovh_cloud_instance.bastion.current_state.networks : n.addresses]) : a.ip
-    if a.version == 4 && a.ip != local.bastion_ip
-  ][0], "")
-}
-
 output "lb_url" {
   description = "Demo URL."
-  value       = "http://${try(ovh_cloud_project_loadbalancer.this.floating_ip.ip, "")}"
+  value       = "http://${ovh_cloud_floating_ip.lb.current_state.ip}"
 }
 
 output "bastion_ip" {
-  description = "Public IPv4 of the bastion."
-  value       = local.bastion_public_ip
+  description = "Public IPv4 (floating) of the bastion."
+  value       = ovh_cloud_floating_ip.bastion.current_state.ip
 }
 
 output "app_private_ips" {
@@ -23,7 +16,7 @@ output "ssh_config" {
   description = "Paste into ~/.ssh/config."
   value       = <<-EOT
     Host ${var.prefix}-bastion
-      HostName ${local.bastion_public_ip}
+      HostName ${ovh_cloud_floating_ip.bastion.current_state.ip}
       User debian
     %{for i, ip in local.app_ips~}
     Host ${local.app_names[i]}
@@ -32,4 +25,9 @@ output "ssh_config" {
       ProxyJump ${var.prefix}-bastion
     %{endfor~}
   EOT
+}
+
+output "lb_id" {
+  description = "Load balancer id (used by tests to detect replacement)."
+  value       = ovh_cloud_loadbalancer.this.id
 }

@@ -9,7 +9,7 @@ crée avant la séance, on détruit après, rien ne tourne entre deux formations
                    │
         ┌──────────┴───────────┐
         │                      │
-   IP flottante           IP publique
+   IP flottante           IP flottante
   (load balancer)          (bastion)
         │                      │  SSH depuis admin_cidr seulement
 ┌───────┴──────────────────────┴───────────────────────────┐
@@ -18,8 +18,8 @@ crée avant la séance, on détruit après, rien ne tourne entre deux formations
 │  akairos-lb ──HTTP──► akairos-app-1   10.42.0.10         │
 │                └────► akairos-app-2   10.42.0.11  ...    │
 │                                                          │
-│  akairos-bastion 10.42.0.5 ──SSH──► app-*                │
-│  akairos-gw (passerelle) : sortie Internet des app-*     │
+│  akairos-bastion (IP privée DHCP) ──SSH──► app-*          │
+│  akairos-gw (passerelle) : SNAT sortant + IP flottantes  │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -28,9 +28,9 @@ Schéma détaillé : [`docs/architecture.html`](docs/architecture.html) (à ouvr
 | Brique | Ressource | Rôle |
 |---|---|---|
 | Réseau privé | `akairos-net` (VLAN 42) + `akairos-subnet` | Relie les machines hors d'Internet |
-| Passerelle | `akairos-gw` (modèle S) | Sortie Internet (SNAT) des instances privées, porte l'IP du LB |
-| Bastion | `akairos-bastion` | Seul point d'entrée SSH |
-| Load balancer | `akairos-lb` (Octavia, small) | HTTP:80 public, round robin, health check `/health` |
+| Passerelle | `akairos-gw` (modèle S) | Sortie Internet (SNAT) des instances privées, porte les IP flottantes |
+| Bastion | `akairos-bastion` + IP flottante | Seul point d'entrée SSH, une seule carte réseau (privée) |
+| Load balancer | `akairos-lb` (Octavia, SMALL) + IP flottante | HTTP:80 public, round robin, health check `/health` ; listener, pool et membres en ressources séparées |
 | Instances | `akairos-app-N` (d2-2, Debian 13) | nginx, page avec le nom de l'instance, **sans IP publique** |
 | Pare-feu | security groups `akairos-bastion-sg`, `akairos-app-sg` | 22 depuis l'admin vers le bastion ; 80 depuis le sous-réseau et 22 depuis le bastion vers les app |
 
@@ -41,10 +41,10 @@ Schéma détaillé : [`docs/architecture.html`](docs/architecture.html) (à ouvr
 - Une clé SSH : `~/.ssh/id_ed25519.pub` par défaut (`-var ssh_public_key_path=...`).
 - Une clé API OVH :
   - **Antoine** : `source env.sh` charge la clé `claude-full` depuis `~/.config/infra/secrets.env` et détecte ton IP publique.
-  - **Stagiaire** : créer une clé sur <https://eu.api.ovh.com/createToken/> avec les droits `GET`, `POST`, `PUT`, `DELETE` sur `/cloud/project/<id-projet>/*`, puis :
+  - **Stagiaire** : créer une clé sur <https://eu.api.ovh.com/createToken/> avec les droits `GET`, `POST`, `PUT`, `DELETE` sur **`/cloud/project/<id-projet>/*` et `/publicCloud/project/<id-projet>/*`** (les ressources `ovh_cloud_*` passent par l'API v2), puis :
     ```bash
     export OVH_APPLICATION_KEY=...  OVH_APPLICATION_SECRET=...  OVH_CONSUMER_KEY=...
-    export TF_VAR_service_name=<id-projet>
+    export TF_VAR_service_name=<id-projet>   # et TF_VAR_region si autre que GRA11
     source env.sh        # ne recharge rien si les OVH_* sont déjà là ; détecte l'IP
     ```
 
@@ -65,9 +65,9 @@ terraform -chdir=infra output
 3. **Passage à l'échelle** :
    ```bash
    terraform -chdir=infra apply -var instance_count=3
-   scripts/verify.sh 30
+   scripts/verify.sh 30 3
    ```
-   L'instance arrive dans le pool dès que son `/health` répond.
+   L'instance arrive dans le pool dès que son `/health` répond. Le load balancer et son IP ne bougent pas : seuls les membres du pool changent.
 4. **Panne d'une instance** : `ssh akairos-app-1 sudo systemctl stop nginx`, relancer `scripts/verify.sh` : app-1 sort de la rotation en ~15 s. `sudo systemctl start nginx` : elle revient.
 5. **Revenir à 2** : `terraform -chdir=infra apply -var instance_count=2` retire l'instance et son membre du pool.
 
@@ -78,13 +78,15 @@ terraform -chdir=infra destroy
 python3 scripts/check-leftovers.py     # doit afficher « nothing left »
 ```
 
-Le script liste tout ce qui commence par `akairos-` (et toute IP flottante orpheline) dans le projet, et vérifie que le bucket de sauvegardes `dna-backups-cronos` est toujours là.
+Le script liste tout ce qui commence par `akairos-` (et toute IP flottante orpheline) dans le projet et la région de `TF_VAR_region`. Il échoue (code 2) si une seule liste n'a pas pu être lue : un contrôle incomplet n'est jamais annoncé comme propre. Sur le Mac d'Antoine, il vérifie aussi que le bucket de sauvegardes `dna-backups-cronos` est toujours là. Si tu as changé de région ou de préfixe, exporte les mêmes `TF_VAR_region` / `TF_VAR_prefix` avant `source env.sh`.
 
 ## Bon à savoir
 
-- **IP qui change** : si ta box a changé d'IP depuis le dernier `apply`, refaire `source env.sh` puis `apply` : la règle SSH du bastion se met à jour.
+- **IP qui change** : si ta box a changé d'IP depuis le dernier `apply`, refaire `source env.sh` puis `apply` : seule la règle SSH du security group change.
 - **Coût** : facturation à l'heure, de l'ordre de quelques centimes par heure pour la configuration par défaut (3 petites instances, un LB small, une passerelle S, une IP flottante). Rien n'est facturé après `destroy`.
 - **Le vRack n'est pas géré ici** : Terraform ne commande ni ne détache de vRack.
-- **Load balancer** : il utilise la ressource `ovh_cloud_project_loadbalancer` (marquée dépréciée) parce que la nouvelle `ovh_cloud_loadbalancer` ne sait pas encore lui attacher une IP flottante (provider 2.24). Le reste utilise la nouvelle famille `ovh_cloud_*`.
+- **Ressources** : uniquement la famille `ovh_cloud_*` du provider (API v2), aucune ressource dépréciée.
+- **Image figée** : une instance garde l'image de sa création, même si OVH publie un Debian 13 plus récent (sinon un simple `apply` réinstallerait les machines en pleine démo). Pour changer : `terraform -chdir=infra apply -replace='ovh_cloud_instance.app[0]'`.
+- **Changer de clé SSH** recrée les instances (le nom de la clé contient son empreinte) : aucune ancienne clé ne reste autorisée.
 - **Tests hors ligne** (aucune ressource créée) : `terraform -chdir=infra test`.
 - **Épingler une image ou un gabarit** : `-var image_name="Debian 13 - UEFI"`, `-var image_id=...`, `-var flavor_name=b3-8`, `-var region=SBG5`.

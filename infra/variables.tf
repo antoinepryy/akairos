@@ -67,18 +67,13 @@ variable "vlan_id" {
   default     = 42
 }
 
-# Optional pins. Null = looked up from flavor_name / image_name / "small".
+# Optional pins. Null = looked up from flavor_name / image_name.
 variable "flavor_id" {
   type    = string
   default = null
 }
 
 variable "image_id" {
-  type    = string
-  default = null
-}
-
-variable "lb_flavor_id" {
   type    = string
   default = null
 }

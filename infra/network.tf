@@ -34,6 +34,6 @@ resource "ovh_cloud_gateway" "this" {
 
   external_gateway = {
     enabled = true
-    model   = "s"
+    model   = "S"
   }
 }

@@ -28,7 +28,7 @@
   <p class="sub">Région GRA11 · projet D&amp;A Engineering · tout est créé par Terraform, sauf le rattachement au vRack.</p>
 
   <figure>
-    <svg viewBox="0 0 1100 610" role="img" aria-label="Deux entrées publiques seulement : l'IP flottante du load balancer pour le HTTP, et l'IP publique du bastion pour le SSH. Les instances applicatives n'ont pas d'IP publique et sortent sur Internet par la passerelle.">
+    <svg viewBox="0 0 1100 610" role="img" aria-label="Deux entrées publiques seulement : l'IP flottante du load balancer pour le HTTP, et l'IP flottante du bastion pour le SSH. Les instances applicatives n'ont pas d'IP publique et sortent sur Internet par la passerelle.">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -67,7 +67,7 @@
         <rect x="330" y="75" width="190" height="75" rx="8" fill="none" stroke="currentColor"/>
         <text x="425" y="98" text-anchor="middle" font-weight="600">akairos-gw</text>
         <text x="425" y="115" text-anchor="middle" opacity=".75">passerelle S · 10.42.0.1</text>
-        <text x="425" y="131" text-anchor="middle" opacity=".75">porte l'IP flottante du LB</text>
+        <text x="425" y="131" text-anchor="middle" opacity=".75">porte les IP flottantes</text>
 
         <!-- egress to Internet -->
         <line x1="370" y1="75" x2="370" y2="8" stroke="currentColor" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
@@ -76,7 +76,7 @@
         <!-- Load balancer -->
         <rect x="570" y="70" width="180" height="100" rx="8" fill="none" stroke="#ea580c" stroke-width="1.5"/>
         <text x="660" y="94" text-anchor="middle" font-weight="600">akairos-lb</text>
-        <text x="660" y="111" text-anchor="middle" opacity=".75">Octavia, flavor small</text>
+        <text x="660" y="111" text-anchor="middle" opacity=".75">Octavia SMALL + IP flottante</text>
         <text x="660" y="127" text-anchor="middle" opacity=".75">HTTP:80 · round robin</text>
         <text x="660" y="143" text-anchor="middle" opacity=".75">health check GET /health</text>
         <text x="660" y="159" text-anchor="middle" opacity=".75">VIP privée</text>
@@ -126,12 +126,12 @@
         <!-- Bastion -->
         <rect x="555" y="440" width="210" height="62" rx="8" fill="none" stroke="currentColor" stroke-width="1.5"/>
         <text x="660" y="463" text-anchor="middle" font-weight="600">akairos-bastion</text>
-        <text x="660" y="480" text-anchor="middle" opacity=".75">IP publique + 10.42.0.5</text>
+        <text x="660" y="480" text-anchor="middle" opacity=".75">IP flottante · 1 carte privée</text>
         <text x="660" y="495" text-anchor="middle" opacity=".75">clé SSH seule, sans mot de passe</text>
 
         <!-- Admin SSH to bastion -->
         <line x1="210" y1="450" x2="552" y2="465" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow)"/>
-        <text x="320" y="446" >SSH :22 → IP publique du bastion</text>
+        <text x="320" y="446" >SSH :22 → IP flottante du bastion</text>
 
         <!-- Bastion to apps -->
         <polyline points="765,470 935,470 935,355" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -139,7 +139,7 @@
         <text x="795" y="490" font-size="11" opacity=".75">ssh akairos-app-1</text>
       </g>
     </svg>
-    <figcaption>Deux entrées publiques seulement : l'IP flottante du load balancer pour le HTTP (en orange), l'IP publique du bastion pour le SSH. Les instances n'ont pas d'IP publique et sortent sur Internet par la passerelle. Les cadres en pointillés sont les security groups OVH.</figcaption>
+    <figcaption>Deux entrées publiques seulement, deux IP flottantes portées par la passerelle : celle du load balancer pour le HTTP (en orange), celle du bastion pour le SSH. Les instances n'ont pas d'IP publique et sortent sur Internet par la passerelle. Les cadres en pointillés sont les security groups OVH.</figcaption>
   </figure>
 
   <h2>Flux autorisés</h2>
@@ -147,7 +147,7 @@
     <tr><th>De</th><th>Vers</th><th>Port</th><th>Par</th></tr>
     <tr><td>Internet</td><td>akairos-lb</td><td class="acc">80</td><td>IP flottante, NAT sur la passerelle</td></tr>
     <tr><td>akairos-lb</td><td>akairos-app-*</td><td class="acc">80</td><td>réseau privé, membres du pool = <code>instance_count</code></td></tr>
-    <tr><td>Ton IP (<code>admin_cidr</code>)</td><td>akairos-bastion</td><td>22</td><td>IP publique du bastion</td></tr>
+    <tr><td>Ton IP (<code>admin_cidr</code>)</td><td>akairos-bastion</td><td>22</td><td>IP flottante du bastion, NAT sur la passerelle</td></tr>
     <tr><td>akairos-bastion</td><td>akairos-app-*</td><td>22</td><td>réseau privé (<code>ProxyJump</code>)</td></tr>
     <tr><td>akairos-app-*</td><td>Internet</td><td>tous</td><td>passerelle (SNAT), pour apt</td></tr>
     <tr><td>Internet</td><td>akairos-app-*</td><td>aucun</td><td>pas d'IP publique</td></tr>
@@ -157,7 +157,7 @@
   <table>
     <tr><th>Élément</th><th>Géré par</th><th>Durée de vie</th></tr>
     <tr><td>Rattachement au vRack <code>pn-1380461</code></td><td>manager OVH (prérequis)</td><td>permanent</td></tr>
-    <tr><td>Réseau, sous-réseau, passerelle, security groups, clé SSH, instances, load balancer, IP flottante</td><td>Terraform (<code>infra/</code>)</td><td>de <code>apply</code> à <code>destroy</code></td></tr>
+    <tr><td>Réseau, sous-réseau, passerelle, security groups, clé SSH, instances, load balancer (listener, pool, membres), 2 IP flottantes</td><td>Terraform (<code>infra/</code>)</td><td>de <code>apply</code> à <code>destroy</code></td></tr>
     <tr><td>Clé API, state Terraform, clé SSH privée</td><td>ton Mac</td><td>jamais dans le dépôt</td></tr>
   </table>
 </main>
