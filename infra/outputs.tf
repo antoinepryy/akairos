@@ -31,3 +31,8 @@ output "lb_id" {
   description = "Load balancer id (used by tests to detect replacement)."
   value       = ovh_cloud_project_loadbalancer.this.id
 }
+
+output "pool_id" {
+  description = "Pool id (used by tests to detect replacement)."
+  value       = ovh_cloud_loadbalancer_pool.http.id
+}

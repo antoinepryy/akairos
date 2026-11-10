@@ -104,23 +104,43 @@ run "bastion" {
 
 run "lb_wiring" {
   command = apply
+
+  assert {
+    condition     = ovh_cloud_project_loadbalancer.this.network.private.floating_ip.id == "fip-uuid" && ovh_cloud_project_loadbalancer.this.listeners == null
+    error_message = "LB holds only the Terraform-managed floating IP, no inline listener"
+  }
+  assert {
+    condition     = ovh_cloud_loadbalancer_listener.http.protocol_port == 80 && ovh_cloud_loadbalancer_listener.http.default_pool_id == ovh_cloud_loadbalancer_pool.http.id
+    error_message = "listener HTTP:80 to the pool"
+  }
+  assert {
+    condition     = ovh_cloud_loadbalancer_pool.http.health_monitor.url_path == "/health" && ovh_cloud_loadbalancer_pool.http.health_monitor.expected_codes == "200"
+    error_message = "health check /health"
+  }
+}
+
+# Scale up then down on the SAME state: only members change, the LB stays.
+run "scale_up" {
+  command = apply
   variables { instance_count = 3 }
 
   assert {
-    condition     = ovh_cloud_project_loadbalancer.this.network.private.floating_ip.id == "fip-uuid"
-    error_message = "LB uses the Terraform-managed floating IP (deleted on destroy)"
+    condition     = length(ovh_cloud_loadbalancer_pool_member.app) == 3
+    error_message = "3 members"
+  }
+}
+
+run "scale_down_keeps_lb" {
+  command = plan
+  variables { instance_count = 2 }
+
+  assert {
+    condition     = length(ovh_cloud_loadbalancer_pool_member.app) == 2
+    error_message = "2 members"
   }
   assert {
-    condition     = length(ovh_cloud_project_loadbalancer.this.listeners[0].pool.members) == 3
-    error_message = "one member per instance"
-  }
-  assert {
-    condition = (
-      ovh_cloud_project_loadbalancer.this.listeners[0].port == 80 &&
-      ovh_cloud_project_loadbalancer.this.listeners[0].pool.health_monitor.http_configuration.url_path == "/health" &&
-      ovh_cloud_project_loadbalancer.this.listeners[0].pool.health_monitor.http_configuration.expected_codes == "200"
-    )
-    error_message = "HTTP:80 with /health monitor"
+    condition     = ovh_cloud_project_loadbalancer.this.id == run.scale_up.lb_id && ovh_cloud_loadbalancer_pool.http.id == run.scale_up.pool_id
+    error_message = "load balancer and pool must not be replaced when scaling"
   }
 }
 

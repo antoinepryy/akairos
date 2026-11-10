@@ -59,7 +59,10 @@ resource "ovh_cloud_instance" "app" {
   }]
 
   lifecycle {
-    ignore_changes = [image_id]
+    # networks: the provider writes the DHCP-assigned IP back into networks[].ip,
+    # so the next apply saw a phantom diff (ip -> null), updated the instance
+    # and replaced its pool member (SBG5, 2026-11-10).
+    ignore_changes = [image_id, networks]
   }
 
   depends_on = [ovh_cloud_gateway.this]

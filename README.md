@@ -71,9 +71,9 @@ terraform -chdir=infra output
    terraform -chdir=infra apply -var instance_count=3
    scripts/verify.sh 30 3
    ```
-   ⚠️ Le load balancer est **recréé** (environ 4 min de coupure mesurées, la même IP revient) : voir « Bon à savoir ». À présenter comme tel, ou à faire pendant une pause. La nouvelle instance n'entre dans le pool qu'une fois son `/health` OK.
+   Seul un membre est ajouté au pool : le load balancer ne bouge pas (mesuré : 135 requêtes sur 135 en 200 pendant l'opération, une par seconde). La nouvelle instance n'entre dans la rotation qu'une fois son `/health` OK.
 4. **Panne d'une instance** : `ssh akairos-app-1 sudo systemctl stop nginx`, relancer `scripts/verify.sh` : app-1 sort de la rotation sans erreur côté client (mesuré : 0 requête en échec). `sudo systemctl start nginx` : elle revient.
-5. **Revenir à 2** : `terraform -chdir=infra apply -var instance_count=2` retire l'instance et son membre du pool (nouvelle recréation du LB).
+5. **Revenir à 2** : `terraform -chdir=infra apply -var instance_count=2` retire l'instance et son membre du pool, sans coupure.
 
 ## Fin de séance
 
@@ -90,7 +90,7 @@ Le script liste tout ce qui commence par `akairos-` (et toute IP flottante orphe
 - **Coût** (catalogue OVH, HT) : ≈ 0,05 €/h pour la configuration par défaut (3 × d2-2 à 0,0104, LB small 0,0083, passerelle S 0,0028, 2 IP flottantes à 0,0027). Toute heure entamée est due. Rien n'est facturé après `destroy`.
 - **Le vRack n'est pas géré ici** : Terraform ne commande ni ne détache de vRack.
 - **Région SBG5** par défaut : le 10/11/2026, GRA11 n'avait plus de capacité d2 (« No valid host was found », à la création comme au redimensionnement). Si ça arrive, changer de région (`-var region=GRA9`) plutôt que d'insister.
-- **Load balancer « ancienne génération »** (`ovh_cloud_project_loadbalancer`, marquée dépréciée) : avec la nouvelle ressource `ovh_cloud_loadbalancer`, OVH refuse d'associer une IP publique (`IAM loadbalancer/usePublicIP … missing X-Ovh-Authentication-Detail-Id`), avec une clé API comme avec un compte de service. Contrepartie : ses membres font partie de la ressource, donc changer `instance_count` recrée le LB. Son IP flottante est une ressource Terraform à part : elle survit à la recréation et part au `destroy`. Tout le reste utilise la nouvelle famille `ovh_cloud_*`.
+- **Load balancer en deux temps** : la nouvelle ressource `ovh_cloud_loadbalancer` ne peut pas recevoir d'IP publique (OVH refuse l'action IAM `loadbalancer/usePublicIP … missing X-Ovh-Authentication-Detail-Id`, avec une clé API comme avec un compte de service). Le LB lui-même est donc créé par l'ancienne ressource `ovh_cloud_project_loadbalancer` (marquée dépréciée), **sans listener**, avec une IP flottante gérée par Terraform. Le listener, le pool et les membres sont des ressources `ovh_cloud_*` séparées, branchées sur ce même LB : changer `instance_count` ne touche que les membres. Une attente de 60 s sépare les deux, car l'API v2 ne voit le LB qu'un peu après sa création (404 sinon).
 - **IP privées** attribuées par OVH (DHCP) : l'API exige qu'une IP fixe soit dans la plage DHCP, ce qui exposerait à des collisions. Terraform relit les adresses après création.
 - **Image figée** : une instance garde l'image de sa création, même si OVH publie un Debian 13 plus récent (sinon un simple `apply` réinstallerait les machines en pleine démo). Pour changer : `terraform -chdir=infra apply -replace='ovh_cloud_instance.app[0]'`.
 - **Clé SSH posée par cloud-init**, pas comme « clé OVH » : supprimer une clé v2 laissait une copie dans le projet, et les créations simultanées se gênaient (409). Changer de clé réinstalle les instances : aucune ancienne clé ne reste autorisée.
