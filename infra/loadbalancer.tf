@@ -1,6 +1,5 @@
-# Separate floating IP, listener, pool and members: scaling instance_count only
-# adds/removes members, the load balancer and its public IP stay in place, and
-# `destroy` deletes the floating IP explicitly.
+# The floating IP is a Terraform resource of its own: `destroy` deletes it,
+# and it survives a load balancer replacement (same demo URL).
 resource "ovh_cloud_floating_ip" "lb" {
   service_name = var.service_name
   region       = var.region
@@ -8,61 +7,62 @@ resource "ovh_cloud_floating_ip" "lb" {
   depends_on   = [ovh_cloud_gateway.this]
 }
 
-resource "ovh_cloud_loadbalancer" "this" {
+# Legacy resource on purpose: with the v2 ovh_cloud_loadbalancer, attaching a
+# public IP requires the IAM action loadbalancer/usePublicIP, which OVH refuses
+# for API keys AND service accounts ("missing X-Ovh-Authentication-Detail-Id",
+# 2026-11-10). Trade-off: members are inline and force replacement, so changing
+# instance_count recreates the LB (a few minutes of downtime, same IP).
+resource "ovh_cloud_project_loadbalancer" "this" {
   service_name = var.service_name
-  region       = var.region
+  region_name  = var.region
   name         = "${var.prefix}-lb"
-  flavor_name  = "SMALL"
+  flavor_id    = local.lb_flavor_id
 
   network = {
-    id        = ovh_cloud_network_private_vrack.this.id
-    subnet_id = ovh_cloud_network_private_vrack_subnet.this.id
-    # Outside the subnet CIDR: associates this existing floating IP to the VIP.
-    ip = ovh_cloud_floating_ip.lb.current_state.ip
+    private = {
+      network = {
+        id        = ovh_cloud_network_private_vrack.this.id
+        subnet_id = ovh_cloud_network_private_vrack_subnet.this.id
+      }
+      gateway = {
+        id = ovh_cloud_gateway.this.id
+      }
+      floating_ip = {
+        id = ovh_cloud_floating_ip.lb.current_state.id
+      }
+    }
   }
-}
 
-resource "ovh_cloud_loadbalancer_pool" "http" {
-  service_name    = var.service_name
-  loadbalancer_id = ovh_cloud_loadbalancer.this.id
-  name            = "${var.prefix}-pool"
-  protocol        = "HTTP"
-  algorithm       = "ROUND_ROBIN"
+  listeners = [{
+    name     = "${var.prefix}-http"
+    port     = 80
+    protocol = "http"
 
-  # An instance still booting (cloud-init) fails /health and gets no traffic.
-  health_monitor = {
-    name             = "${var.prefix}-health"
-    type             = "HTTP"
-    delay            = 5
-    timeout          = 3
-    max_retries      = 2
-    max_retries_down = 2
-    http_method      = "GET"
-    url_path         = "/health"
-    expected_codes   = "200"
-  }
-}
+    pool = {
+      name      = "${var.prefix}-pool"
+      protocol  = "http"
+      algorithm = "roundRobin"
 
-resource "ovh_cloud_loadbalancer_listener" "http" {
-  service_name    = var.service_name
-  loadbalancer_id = ovh_cloud_loadbalancer.this.id
-  name            = "${var.prefix}-http"
-  protocol        = "HTTP"
-  protocol_port   = 80
-  default_pool_id = ovh_cloud_loadbalancer_pool.http.id
-}
+      # An instance still booting (cloud-init) fails /health and gets no traffic.
+      health_monitor = {
+        name             = "${var.prefix}-health"
+        monitor_type     = "http"
+        delay            = 5
+        timeout          = 3
+        max_retries      = 2
+        max_retries_down = 2
+        http_configuration = {
+          http_method    = "GET"
+          url_path       = "/health"
+          expected_codes = "200"
+        }
+      }
 
-# Same range as the instances: scaling down removes the matching member.
-resource "ovh_cloud_loadbalancer_pool_member" "app" {
-  count = var.instance_count
-
-  service_name    = var.service_name
-  loadbalancer_id = ovh_cloud_loadbalancer.this.id
-  pool_id         = ovh_cloud_loadbalancer_pool.http.id
-  name            = local.app_names[count.index]
-  address         = local.app_ips[count.index]
-  protocol_port   = 80
-  subnet_id       = ovh_cloud_network_private_vrack_subnet.this.id
-
-  depends_on = [ovh_cloud_instance.app]
+      members = [for i, ip in local.app_ips : {
+        name          = local.app_names[i]
+        address       = ip
+        protocol_port = 80
+      }]
+    }
+  }]
 }

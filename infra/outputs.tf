@@ -20,7 +20,7 @@ output "ssh_config" {
       User debian
     %{for i, ip in local.app_ips~}
     Host ${local.app_names[i]}
-      HostName ${ip}
+      HostName ${coalesce(ip, "unknown")}
       User debian
       ProxyJump ${var.prefix}-bastion
     %{endfor~}
@@ -29,5 +29,5 @@ output "ssh_config" {
 
 output "lb_id" {
   description = "Load balancer id (used by tests to detect replacement)."
-  value       = ovh_cloud_loadbalancer.this.id
+  value       = ovh_cloud_project_loadbalancer.this.id
 }

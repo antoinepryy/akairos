@@ -17,10 +17,9 @@ resource "ovh_cloud_network_private_vrack_subnet" "this" {
   dhcp_enabled    = true
   dns_nameservers = ["213.186.33.99"]
 
-  # Fixed IPs (.5 bastion, .10+ apps) stay outside the DHCP pool.
   allocation_pools = [{
-    start = cidrhost(var.subnet_cidr, 100)
-    end   = cidrhost(var.subnet_cidr, 200)
+    start = cidrhost(var.subnet_cidr, 10)
+    end   = cidrhost(var.subnet_cidr, 250)
   }]
 }
 

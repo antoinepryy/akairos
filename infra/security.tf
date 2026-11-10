@@ -1,9 +1,6 @@
-locals {
-  allow_all_egress = [
-    { direction = "EGRESS", ethernet_type = "IPV4", description = "all outbound IPv4" },
-    { direction = "EGRESS", ethernet_type = "IPV6", description = "all outbound IPv6" },
-  ]
-}
+# No egress rules here: OpenStack adds "allow all egress" (IPv4 + IPv6) to every
+# new security group, and declaring them again makes the API reject the group
+# ("A rule with identical parameters already exists") and leaves it CREATING.
 
 # Bastion: SSH from the admin only.
 resource "ovh_cloud_security_group" "bastion" {
@@ -12,7 +9,7 @@ resource "ovh_cloud_security_group" "bastion" {
   name         = "${var.prefix}-bastion-sg"
   description  = "SSH from admin_cidr only"
 
-  rule = concat(local.allow_all_egress, [{
+  rule = [{
     direction        = "INGRESS"
     ethernet_type    = "IPV4"
     protocol         = "TCP"
@@ -20,7 +17,7 @@ resource "ovh_cloud_security_group" "bastion" {
     port_range_max   = 22
     remote_ip_prefix = var.admin_cidr
     description      = "SSH from admin"
-  }])
+  }]
 }
 
 # App instances: HTTP from the private subnet (load balancer), SSH from the bastion only.
@@ -30,7 +27,7 @@ resource "ovh_cloud_security_group" "app" {
   name         = "${var.prefix}-app-sg"
   description  = "HTTP from the subnet, SSH from the bastion"
 
-  rule = concat(local.allow_all_egress, [
+  rule = [
     {
       direction        = "INGRESS"
       ethernet_type    = "IPV4"
@@ -49,5 +46,5 @@ resource "ovh_cloud_security_group" "app" {
       remote_group_id = ovh_cloud_security_group.bastion.id
       description     = "SSH from bastion"
     },
-  ])
+  ]
 }

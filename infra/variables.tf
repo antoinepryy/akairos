@@ -28,9 +28,11 @@ variable "instance_count" {
 }
 
 variable "flavor_name" {
+  # d2-2 (cheapest) hit "No valid host was found" in GRA11 on 2026-11-10;
+  # d2-4 is the next size up (0.0206 EUR/h excl. VAT vs 0.0104).
   description = "Flavor of the bastion and app instances."
   type        = string
-  default     = "d2-2"
+  default     = "d2-4"
 }
 
 variable "image_name" {
@@ -67,13 +69,18 @@ variable "vlan_id" {
   default     = 42
 }
 
-# Optional pins. Null = looked up from flavor_name / image_name.
+# Optional pins. Null = looked up from flavor_name / image_name / "small".
 variable "flavor_id" {
   type    = string
   default = null
 }
 
 variable "image_id" {
+  type    = string
+  default = null
+}
+
+variable "lb_flavor_id" {
   type    = string
   default = null
 }

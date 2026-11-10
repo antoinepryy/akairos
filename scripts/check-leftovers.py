@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """List any akairos-* resource left in the project after `terraform destroy`.
 
-Read-only (GET only). Uses OVH_APPLICATION_KEY / _SECRET / OVH_CONSUMER_KEY
-from env.sh. Project, region and prefix come from TF_VAR_service_name,
+Read-only (GET only). Authenticates with the OAuth2 service account
+(OVH_CLIENT_ID / OVH_CLIENT_SECRET, exported by env.sh). Project, region and prefix come from TF_VAR_service_name,
 TF_VAR_region and TF_VAR_prefix: run it with the same values as `apply`
 (env.sh exports them). Exit 1 if something is left, if any API call failed
 (an incomplete check is never reported as clean), or if CHECK_BUCKET is set
 and that bucket is missing (env.sh sets it to the backup bucket on Antoine's Mac).
 """
-import hashlib
 import json
 import os
 import sys
-import time
+import urllib.parse
 import urllib.error
 import urllib.request
 
@@ -25,16 +24,26 @@ CHECK_BUCKET = os.environ.get("CHECK_BUCKET", "")
 ERRORS = []
 
 
+TOKEN_URL = "https://www.ovh.com/auth/oauth2/token"
+_token = None
+
+
+def token():
+    global _token
+    if _token is None:
+        body = urllib.parse.urlencode({
+            "grant_type": "client_credentials", "scope": "all",
+            "client_id": os.environ["OVH_CLIENT_ID"], "client_secret": os.environ["OVH_CLIENT_SECRET"],
+        }).encode()
+        _token = json.loads(urllib.request.urlopen(TOKEN_URL, data=body).read())["access_token"]
+    return _token
+
+
 def get(path):
-    url = API + path
-    ts = urllib.request.urlopen(API + "/auth/time").read().decode().strip()
-    ak, sk, ck = (os.environ[k] for k in ("OVH_APPLICATION_KEY", "OVH_APPLICATION_SECRET", "OVH_CONSUMER_KEY"))
-    sig = "$1$" + hashlib.sha1("+".join([sk, ck, "GET", url, "", ts]).encode()).hexdigest()
-    req = urllib.request.Request(url, headers={
-        "X-Ovh-Application": ak, "X-Ovh-Consumer": ck, "X-Ovh-Timestamp": ts, "X-Ovh-Signature": sig})
     try:
+        req = urllib.request.Request(API + path, headers={"Authorization": "Bearer " + token()})
         return json.loads(urllib.request.urlopen(req).read() or "null")
-    except (urllib.error.URLError, ValueError) as e:
+    except (urllib.error.URLError, ValueError, KeyError) as e:
         ERRORS.append(f"GET {path}: {e}")
         return []
 

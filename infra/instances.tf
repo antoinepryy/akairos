@@ -58,7 +58,6 @@ resource "ovh_cloud_instance" "app" {
   networks = [{
     network_id = ovh_cloud_network_private_vrack.this.id
     subnet_id  = ovh_cloud_network_private_vrack_subnet.this.id
-    ip         = local.app_ips[count.index]
   }]
 
   lifecycle {

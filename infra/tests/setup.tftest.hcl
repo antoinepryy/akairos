@@ -2,7 +2,8 @@
 mock_provider "ovh" {
   mock_resource "ovh_cloud_floating_ip" {
     defaults = {
-      current_state = { ip = "198.51.100.20" }
+      id            = "198.51.100.20"
+      current_state = { id = "fip-uuid", ip = "198.51.100.20" }
     }
   }
 }
@@ -14,18 +15,15 @@ variables {
   ssh_public_key_path = "./tests/fixtures/id_test.pub"
   flavor_id           = "flavor-d2-2"
   image_id            = "img-new"
+  lb_flavor_id        = "lb-small"
 }
 
 run "defaults" {
   command = plan
 
   assert {
-    condition     = local.app_ips == ["10.42.0.10", "10.42.0.11"]
-    error_message = "two app IPs from .10 by default"
-  }
-  assert {
-    condition     = local.app_names[1] == "akairos-app-2"
-    error_message = "app names prefixed"
+    condition     = local.app_names == ["akairos-app-1", "akairos-app-2"]
+    error_message = "two prefixed app names by default"
   }
   assert {
     condition     = startswith(ovh_cloud_ssh_key.this.name, "akairos-key-") && length(ovh_cloud_ssh_key.this.name) == 20
@@ -53,8 +51,8 @@ run "network" {
     error_message = "network name/vlan"
   }
   assert {
-    condition     = ovh_cloud_network_private_vrack_subnet.this.cidr == "10.42.0.0/24" && ovh_cloud_network_private_vrack_subnet.this.allocation_pools[0].start == "10.42.0.100"
-    error_message = "subnet cidr and DHCP pool"
+    condition     = ovh_cloud_network_private_vrack_subnet.this.cidr == "10.42.0.0/24"
+    error_message = "subnet cidr"
   }
   assert {
     condition     = ovh_cloud_gateway.this.name == "akairos-gw" && ovh_cloud_gateway.this.external_gateway.model == "S"
@@ -72,9 +70,9 @@ run "app_instances_private_only" {
   }
   assert {
     condition = alltrue([for i in ovh_cloud_instance.app : alltrue([
-      for n in i.networks : n.auto_assign_public_ip != true && can(regex("^10\\.42\\.0\\.", n.ip))
+      for n in i.networks : n.auto_assign_public_ip != true && n.ip == null
     ])])
-    error_message = "app instances: private IPs only, no public interface"
+    error_message = "app instances: private interface only, no public IP, no floating IP"
   }
   assert {
     condition     = strcontains(base64decode(ovh_cloud_instance.app[0].user_data), "location = /health") && strcontains(base64decode(ovh_cloud_instance.app[0].user_data), "NAME=\"akairos-app-1\"")
@@ -106,43 +104,23 @@ run "bastion" {
 
 run "lb_wiring" {
   command = apply
-
-  assert {
-    condition     = ovh_cloud_loadbalancer.this.flavor_name == "SMALL" && ovh_cloud_loadbalancer.this.network.ip == "198.51.100.20"
-    error_message = "LB small, VIP associated to the floating IP"
-  }
-  assert {
-    condition     = ovh_cloud_loadbalancer_listener.http.protocol_port == 80 && ovh_cloud_loadbalancer_listener.http.default_pool_id == ovh_cloud_loadbalancer_pool.http.id
-    error_message = "listener HTTP:80 to the pool"
-  }
-  assert {
-    condition     = ovh_cloud_loadbalancer_pool.http.health_monitor.url_path == "/health" && ovh_cloud_loadbalancer_pool.http.health_monitor.expected_codes == "200"
-    error_message = "health check /health"
-  }
-}
-
-# Scale up then down on the SAME state: the LB must stay, only members change.
-run "scale_up" {
-  command = apply
   variables { instance_count = 3 }
 
   assert {
-    condition     = length(ovh_cloud_loadbalancer_pool_member.app) == 3
-    error_message = "3 members"
-  }
-}
-
-run "scale_down_keeps_lb" {
-  command = plan
-  variables { instance_count = 2 }
-
-  assert {
-    condition     = length(ovh_cloud_loadbalancer_pool_member.app) == 2 && ovh_cloud_loadbalancer_pool_member.app[1].address == "10.42.0.11"
-    error_message = "2 members, second on .11"
+    condition     = ovh_cloud_project_loadbalancer.this.network.private.floating_ip.id == "fip-uuid"
+    error_message = "LB uses the Terraform-managed floating IP (deleted on destroy)"
   }
   assert {
-    condition     = ovh_cloud_loadbalancer.this.id == run.scale_up.lb_id
-    error_message = "load balancer must not be replaced when scaling"
+    condition     = length(ovh_cloud_project_loadbalancer.this.listeners[0].pool.members) == 3
+    error_message = "one member per instance"
+  }
+  assert {
+    condition = (
+      ovh_cloud_project_loadbalancer.this.listeners[0].port == 80 &&
+      ovh_cloud_project_loadbalancer.this.listeners[0].pool.health_monitor.http_configuration.url_path == "/health" &&
+      ovh_cloud_project_loadbalancer.this.listeners[0].pool.health_monitor.http_configuration.expected_codes == "200"
+    )
+    error_message = "HTTP:80 with /health monitor"
   }
 }
 
