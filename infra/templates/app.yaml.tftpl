@@ -1,0 +1,41 @@
+#cloud-config
+package_update: true
+packages:
+  - nginx
+
+write_files:
+  - path: /etc/nginx/sites-available/default
+    content: |
+      server {
+        listen 80 default_server;
+        root /var/www/html;
+        index index.html;
+        add_header Cache-Control "no-store";
+
+        location = /health {
+          default_type text/plain;
+          return 200 "ok\n";
+        }
+      }
+  - path: /usr/local/bin/render-page
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      # Page shown by the demo: which instance answered.
+      NAME="${name}"
+      IP="$(hostname -I | awk '{print $1}')"
+      BOOT="$(uptime -s)"
+      COLOR="#$(printf '%s' "$NAME" | md5sum | cut -c1-6)"
+      cat > /var/www/html/index.html <<HTML
+      <!DOCTYPE html>
+      <html lang="fr"><head><meta charset="utf-8"><title>$NAME</title>
+      <style>body{font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:$COLOR;color:#fff;text-shadow:0 1px 3px #000}
+      main{background:#0008;padding:2rem 3rem;border-radius:12px}h1{margin:0 0 1rem;font-size:3rem}</style></head>
+      <body><main><h1 id="instance">$NAME</h1>
+      <p>IP privée : <b>$IP</b></p><p>Démarrée le : $BOOT</p></main></body></html>
+      HTML
+
+runcmd:
+  - /usr/local/bin/render-page
+  - systemctl enable --now nginx
+  - systemctl reload nginx
