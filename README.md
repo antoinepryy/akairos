@@ -15,8 +15,8 @@ crée avant la séance, on détruit après, rien ne tourne entre deux formations
 ┌───────┴──────────────────────┴───────────────────────────┐
 │ vRack  ·  réseau privé akairos-net  ·  10.42.0.0/24      │
 │                                                          │
-│  akairos-lb ──HTTP──► akairos-app-1   10.42.0.10         │
-│                └────► akairos-app-2   10.42.0.11  ...    │
+│  akairos-lb ──HTTP──► akairos-app-1   (IP privée DHCP)   │
+│                └────► akairos-app-2   ...                │
 │                                                          │
 │  akairos-bastion (IP privée DHCP) ──SSH──► app-*          │
 │  akairos-gw (passerelle) : SNAT sortant + IP flottantes  │
@@ -30,7 +30,7 @@ Schéma détaillé : [`docs/architecture.html`](docs/architecture.html) (à ouvr
 | Réseau privé | `akairos-net` (VLAN 42) + `akairos-subnet` | Relie les machines hors d'Internet |
 | Passerelle | `akairos-gw` (modèle S) | Sortie Internet (SNAT) des instances privées, porte les IP flottantes |
 | Bastion | `akairos-bastion` + IP flottante | Seul point d'entrée SSH, une seule carte réseau (privée) |
-| Load balancer | `akairos-lb` (Octavia, SMALL) + IP flottante | HTTP:80 public, round robin, health check `/health` ; listener, pool et membres en ressources séparées |
+| Load balancer | `akairos-lb` (Octavia, small) + IP flottante | HTTP:80 public, round robin, health check `/health` |
 | Instances | `akairos-app-N` (d2-2, Debian 13) | nginx, page avec le nom de l'instance, **sans IP publique** |
 | Pare-feu | security groups `akairos-bastion-sg`, `akairos-app-sg` | 22 depuis l'admin vers le bastion ; 80 depuis le sous-réseau et 22 depuis le bastion vers les app |
 
@@ -39,21 +39,25 @@ Schéma détaillé : [`docs/architecture.html`](docs/architecture.html) (à ouvr
 - Terraform ≥ 1.9 (`brew install terraform`).
 - Un projet Public Cloud **rattaché à un vRack** (fait une fois dans le manager OVH, hors Terraform).
 - Une clé SSH : `~/.ssh/id_ed25519.pub` par défaut (`-var ssh_public_key_path=...`).
-- Une clé API OVH :
-  - **Antoine** : `source env.sh` charge la clé `claude-full` depuis `~/.config/infra/secrets.env` et détecte ton IP publique.
-  - **Stagiaire** : créer une clé sur <https://eu.api.ovh.com/createToken/> avec les droits `GET`, `POST`, `PUT`, `DELETE` sur **`/cloud/project/<id-projet>/*` et `/publicCloud/project/<id-projet>/*`** (les ressources `ovh_cloud_*` passent par l'API v2), puis :
-    ```bash
-    export OVH_APPLICATION_KEY=...  OVH_APPLICATION_SECRET=...  OVH_CONSUMER_KEY=...
-    export TF_VAR_service_name=<id-projet>   # et TF_VAR_region si autre que GRA11
-    source env.sh        # ne recharge rien si les OVH_* sont déjà là ; détecte l'IP
-    ```
+- Un **compte de service OVH** (OAuth2), pas une clé API classique : certaines actions de l'API v2 vérifient une identité IAM qu'une clé classique ne porte pas.
+  - **Antoine** : `source env.sh` charge le compte de service `akairos-terraform` (politique IAM limitée au projet D&A Engineering) depuis `~/.config/infra/secrets.env` et détecte ton IP publique.
+  - **Stagiaire** :
+    1. Avec une clé API classique ou depuis la console API (<https://eu.api.ovh.com/console/>), créer le compte : `POST /me/api/oauth2/client` avec `{"name":"terraform","description":"formation","flow":"CLIENT_CREDENTIALS","callbackUrls":[]}`. Noter `clientId` et `clientSecret` (affiché une seule fois).
+    2. Lire son identité : `GET /me/api/oauth2/client/<clientId>` → champ `identity`.
+    3. Lui donner les droits sur le projet : `POST /v2/iam/policy` avec `{"name":"terraform","identities":["<identity>"],"resources":[{"urn":"urn:v1:eu:resource:publicCloudProject:<id-projet>"}],"permissions":{"allow":[{"action":"publicCloudProject:apiovh:*"}]}}`.
+    4. Puis :
+       ```bash
+       export OVH_CLIENT_ID=...  OVH_CLIENT_SECRET=...
+       export TF_VAR_service_name=<id-projet>   # et TF_VAR_region si autre que SBG5
+       source env.sh        # ne recharge rien si OVH_CLIENT_ID est déjà là ; détecte l'IP
+       ```
 
 ## Déroulé de la démo
 
 ```bash
 source env.sh
 terraform -chdir=infra init
-terraform -chdir=infra apply                 # ~5 à 10 min (le LB est le plus long)
+terraform -chdir=infra apply                 # ~8 à 10 min (le LB prend ~3 min à lui seul)
 terraform -chdir=infra output
 ```
 
@@ -61,20 +65,20 @@ terraform -chdir=infra output
    ```bash
    scripts/verify.sh 20
    ```
-2. **Accès par le bastion** : coller la sortie `terraform -chdir=infra output -raw ssh_config` dans `~/.ssh/config`, puis `ssh akairos-app-1`. Montrer qu'un accès direct est impossible : les instances n'ont aucune IP publique (`ssh debian@10.42.0.10` sans bastion ne mène nulle part).
+2. **Accès par le bastion** : coller la sortie `terraform -chdir=infra output -raw ssh_config` dans `~/.ssh/config`, puis `ssh akairos-app-1`. Montrer qu'un accès direct est impossible : les instances n'ont aucune IP publique (`ssh debian@<IP privée de app_private_ips>` sans bastion finit en timeout).
 3. **Passage à l'échelle** :
    ```bash
    terraform -chdir=infra apply -var instance_count=3
    scripts/verify.sh 30 3
    ```
-   L'instance arrive dans le pool dès que son `/health` répond. Le load balancer et son IP ne bougent pas : seuls les membres du pool changent.
-4. **Panne d'une instance** : `ssh akairos-app-1 sudo systemctl stop nginx`, relancer `scripts/verify.sh` : app-1 sort de la rotation en ~15 s. `sudo systemctl start nginx` : elle revient.
-5. **Revenir à 2** : `terraform -chdir=infra apply -var instance_count=2` retire l'instance et son membre du pool.
+   ⚠️ Le load balancer est **recréé** (environ 4 min de coupure mesurées, la même IP revient) : voir « Bon à savoir ». À présenter comme tel, ou à faire pendant une pause. La nouvelle instance n'entre dans le pool qu'une fois son `/health` OK.
+4. **Panne d'une instance** : `ssh akairos-app-1 sudo systemctl stop nginx`, relancer `scripts/verify.sh` : app-1 sort de la rotation sans erreur côté client (mesuré : 0 requête en échec). `sudo systemctl start nginx` : elle revient.
+5. **Revenir à 2** : `terraform -chdir=infra apply -var instance_count=2` retire l'instance et son membre du pool (nouvelle recréation du LB).
 
 ## Fin de séance
 
 ```bash
-terraform -chdir=infra destroy
+terraform -chdir=infra destroy               # avec le même -var instance_count que le dernier apply
 python3 scripts/check-leftovers.py     # doit afficher « nothing left »
 ```
 
@@ -83,10 +87,12 @@ Le script liste tout ce qui commence par `akairos-` (et toute IP flottante orphe
 ## Bon à savoir
 
 - **IP qui change** : si ta box a changé d'IP depuis le dernier `apply`, refaire `source env.sh` puis `apply` : seule la règle SSH du security group change.
-- **Coût** : facturation à l'heure, de l'ordre de quelques centimes par heure pour la configuration par défaut (3 petites instances, un LB small, une passerelle S, une IP flottante). Rien n'est facturé après `destroy`.
+- **Coût** (catalogue OVH, HT) : ≈ 0,05 €/h pour la configuration par défaut (3 × d2-2 à 0,0104, LB small 0,0083, passerelle S 0,0028, 2 IP flottantes à 0,0027). Toute heure entamée est due. Rien n'est facturé après `destroy`.
 - **Le vRack n'est pas géré ici** : Terraform ne commande ni ne détache de vRack.
-- **Ressources** : uniquement la famille `ovh_cloud_*` du provider (API v2), aucune ressource dépréciée.
+- **Région SBG5** par défaut : le 10/11/2026, GRA11 n'avait plus de capacité d2 (« No valid host was found », à la création comme au redimensionnement). Si ça arrive, changer de région (`-var region=GRA9`) plutôt que d'insister.
+- **Load balancer « ancienne génération »** (`ovh_cloud_project_loadbalancer`, marquée dépréciée) : avec la nouvelle ressource `ovh_cloud_loadbalancer`, OVH refuse d'associer une IP publique (`IAM loadbalancer/usePublicIP … missing X-Ovh-Authentication-Detail-Id`), avec une clé API comme avec un compte de service. Contrepartie : ses membres font partie de la ressource, donc changer `instance_count` recrée le LB. Son IP flottante est une ressource Terraform à part : elle survit à la recréation et part au `destroy`. Tout le reste utilise la nouvelle famille `ovh_cloud_*`.
+- **IP privées** attribuées par OVH (DHCP) : l'API exige qu'une IP fixe soit dans la plage DHCP, ce qui exposerait à des collisions. Terraform relit les adresses après création.
 - **Image figée** : une instance garde l'image de sa création, même si OVH publie un Debian 13 plus récent (sinon un simple `apply` réinstallerait les machines en pleine démo). Pour changer : `terraform -chdir=infra apply -replace='ovh_cloud_instance.app[0]'`.
-- **Changer de clé SSH** recrée les instances (le nom de la clé contient son empreinte) : aucune ancienne clé ne reste autorisée.
+- **Clé SSH posée par cloud-init**, pas comme « clé OVH » : supprimer une clé v2 laissait une copie dans le projet, et les créations simultanées se gênaient (409). Changer de clé réinstalle les instances : aucune ancienne clé ne reste autorisée.
 - **Tests hors ligne** (aucune ressource créée) : `terraform -chdir=infra test`.
-- **Épingler une image ou un gabarit** : `-var image_name="Debian 13 - UEFI"`, `-var image_id=...`, `-var flavor_name=b3-8`, `-var region=SBG5`.
+- **Épingler une image ou un gabarit** : `-var image_name="Debian 13 - UEFI"`, `-var image_id=...`, `-var flavor_name=d2-4`, `-var region=GRA9`.

@@ -26,8 +26,8 @@ run "defaults" {
     error_message = "two prefixed app names by default"
   }
   assert {
-    condition     = startswith(ovh_cloud_ssh_key.this.name, "akairos-key-") && length(ovh_cloud_ssh_key.this.name) == 20
-    error_message = "ssh key name carries the key fingerprint"
+    condition     = strcontains(base64decode(ovh_cloud_instance.bastion.user_data), "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyOnlyForOfflineTests")
+    error_message = "SSH public key injected by cloud-init"
   }
 }
 

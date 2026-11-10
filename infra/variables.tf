@@ -5,9 +5,10 @@ variable "service_name" {
 }
 
 variable "region" {
+  # GRA11 ran out of d2 capacity on 2026-11-10 ("No valid host was found").
   description = "OpenStack region where everything is created."
   type        = string
-  default     = "GRA11"
+  default     = "SBG5"
 }
 
 variable "prefix" {
@@ -28,11 +29,11 @@ variable "instance_count" {
 }
 
 variable "flavor_name" {
-  # d2-2 (cheapest) hit "No valid host was found" in GRA11 on 2026-11-10;
-  # d2-4 is the next size up (0.0206 EUR/h excl. VAT vs 0.0104).
+  # Cheapest flavor. If a region answers "No valid host was found", try another
+  # region (or d2-4) rather than retrying.
   description = "Flavor of the bastion and app instances."
   type        = string
-  default     = "d2-4"
+  default     = "d2-2"
 }
 
 variable "image_name" {

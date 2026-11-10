@@ -17,7 +17,7 @@ import urllib.request
 
 API = "https://eu.api.ovh.com/1.0"
 PROJECT = os.environ.get("TF_VAR_service_name", "120a120c626c48d28773c56e42bce375")
-REGION = os.environ.get("TF_VAR_region", "GRA11")
+REGION = os.environ.get("TF_VAR_region", "SBG5")
 PREFIX = os.environ.get("TF_VAR_prefix", "akairos") + "-"
 # "REGION/name" of a bucket that must survive, or empty to skip the check.
 CHECK_BUCKET = os.environ.get("CHECK_BUCKET", "")

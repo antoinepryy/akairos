@@ -18,12 +18,12 @@ output "ssh_config" {
     Host ${var.prefix}-bastion
       HostName ${ovh_cloud_floating_ip.bastion.current_state.ip}
       User debian
-    %{for i, ip in local.app_ips~}
+    %{~for i, ip in local.app_ips}
     Host ${local.app_names[i]}
       HostName ${coalesce(ip, "unknown")}
       User debian
       ProxyJump ${var.prefix}-bastion
-    %{endfor~}
+    %{~endfor}
   EOT
 }
 

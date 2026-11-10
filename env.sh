@@ -20,7 +20,7 @@ unset OVH_APPLICATION_KEY OVH_APPLICATION_SECRET OVH_CONSUMER_KEY
 export OVH_ENDPOINT="${OVH_ENDPOINT_OVERRIDE:-ovh-eu}"
 
 # Same values for terraform and scripts/check-leftovers.py (override before sourcing).
-export TF_VAR_region="${TF_VAR_region:-GRA11}"
+export TF_VAR_region="${TF_VAR_region:-SBG5}"
 export TF_VAR_prefix="${TF_VAR_prefix:-akairos}"
 
 if ip="$(curl -fsS --max-time 5 https://api.ipify.org)"; then
