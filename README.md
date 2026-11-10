@@ -84,6 +84,50 @@ python3 scripts/check-leftovers.py     # doit afficher « nothing left »
 
 Le script liste tout ce qui commence par `akairos-` (et toute IP flottante orpheline) dans le projet et la région de `TF_VAR_region`. Il échoue (code 2) si une seule liste n'a pas pu être lue : un contrôle incomplet n'est jamais annoncé comme propre. Sur le Mac d'Antoine, il vérifie aussi que le bucket de sauvegardes `dna-backups-cronos` est toujours là. Si tu as changé de région ou de préfixe, exporte les mêmes `TF_VAR_region` / `TF_VAR_prefix` avant `source env.sh`.
 
+## Niveau 2 : Kubernetes, Helm et Argo CD
+
+Même vRack, mais l'orchestration passe à Kubernetes. Ce que le niveau 1 fait à la main (load balancer, ajout d'instances, mise à jour), le cluster le fait seul, et git devient la source de vérité. Les deux niveaux ont chacun leur réseau (VLAN 43, `10.43.0.0/24`) et peuvent tourner ensemble.
+
+| Brique | Ressource | Rôle |
+|---|---|---|
+| Réseau | `akairos-k8s-net` + sous-réseau + passerelle `akairos-k8s-gw` | Réseau privé des nœuds ; sortie Internet et IP flottantes |
+| Cluster | `akairos-k8s` (Managed Kubernetes, plan Free) | Plan de contrôle gratuit, API ouverte à `admin_cidr` seulement (l'équivalent du bastion) |
+| Nœuds | `akairos-k8s-workers` : 2 × d2-4, anti-affinité | Chaque nœud sur un hôte physique différent |
+| Argo CD | chart `argo-cd`, installé par Terraform (provider Helm) | Synchronise le cluster avec git toutes les 30 s |
+| App | chart [`apps/web`](apps/web) : 3 pods nginx, `Service LoadBalancer` | La page affiche le pod, le nœud et la version ; le load balancer est créé par Kubernetes |
+
+Prérequis en plus du niveau 1 : `kubectl` (`brew install kubectl`). Un stagiaire forke le dépôt (public) et passe `-var git_repo_url=https://github.com/<lui>/akairos.git`.
+
+```bash
+source env.sh
+terraform -chdir=k8s init
+terraform -chdir=k8s apply                    # ~15 min (cluster ~8 min, nœuds ~5 min)
+eval "$(scripts/k8s-kubeconfig.sh)"           # exporte KUBECONFIG
+export URL="$(scripts/k8s-url.sh)"            # attend l'IP du load balancer
+kubectl -n web get pods -o wide
+```
+
+1. **Répartition** : `scripts/verify.sh 30 3` (le nom du pod et du nœud changent).
+2. **Autoréparation** : `kubectl -n web delete pod <un pod>` ; un autre le remplace en quelques secondes. `kubectl -n web scale deploy web --replicas=1` est annulé par Argo CD : c'est git qui décide.
+3. **Mise à l'échelle par git** : `replicas: 5` dans [`apps/web/values.yaml`](apps/web/values.yaml), commit, push ; 30 s plus tard, 5 pods.
+4. **Mise à jour sans coupure** : dans un terminal, `scripts/verify.sh 300 1` ; dans l'autre, `version: v2` et `color: "#16a34a"`, commit, push. Les pods sont remplacés un par un (un en plus d'abord, sonde `/health`, 5 s de délai avant l'arrêt) : aucune requête en échec, la page passe au vert.
+5. **Retour arrière** : `git revert HEAD && git push`.
+6. **Perte d'un nœud** : `kubectl drain <nœud> --ignore-daemonsets --delete-emptydir-data` ; les pods migrent sur l'autre nœud, un seul à la fois (PodDisruptionBudget). `kubectl uncordon <nœud>` ensuite.
+7. **Interface Argo CD** (facultatif) : `kubectl -n argocd port-forward svc/argocd-server 8080:80`, puis <http://localhost:8080>, utilisateur `admin`, mot de passe : `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`.
+
+Fin de séance :
+
+```bash
+terraform -chdir=k8s destroy
+python3 scripts/check-leftovers.py           # « nothing left »
+```
+
+**Piège géré** : le load balancer de l'app est créé par Kubernetes, Terraform ne le connaît pas. Si le cluster disparaissait avant lui, il resterait chez OVH, facturé. Au `destroy`, Terraform supprime donc d'abord l'Application Argo CD (qui supprime le Service), attend que le Service ait disparu (il ne disparaît qu'une fois le load balancer supprimé chez OVH), puis seulement Argo CD et le cluster. `check-leftovers` contrôle aussi les clusters et les load balancers `kube_service_*`.
+
+**Coût** (HT) : ≈ 0,06 €/h (2 × d2-4 à 0,0206, LB small 0,0083, passerelle S 0,0028, IP flottante 0,0027). Le plan Free du cluster est gratuit ; le plan Standard coûterait 0,09 €/h de plus.
+
+**Tests hors ligne** : `terraform -chdir=k8s test` et `helm lint apps/web`.
+
 ## Bon à savoir
 
 - **IP qui change** : si ta box a changé d'IP depuis le dernier `apply`, refaire `source env.sh` puis `apply` : seule la règle SSH du security group change.

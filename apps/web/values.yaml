@@ -1,0 +1,11 @@
+# Edit, commit, push: Argo CD rolls it out within ~30 s.
+replicas: 3
+
+# Shown on the page. Change version + color for a visible rolling update.
+version: v1
+color: "#2563eb"
+
+image: nginx:1.30-alpine
+
+# Name of the OVH load balancer created for the Service (found by check-leftovers).
+loadBalancerName: akairos-k8s-web

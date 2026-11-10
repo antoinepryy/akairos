@@ -2,10 +2,11 @@
 # Hit the load balancer N times, count which instance answered.
 # Exit 1 on any failed request, or if fewer than EXPECT distinct instances answered.
 # Usage: scripts/verify.sh [requests=20] [expected_instances=2]
+# Level 2 (Kubernetes): URL="$(scripts/k8s-url.sh)" scripts/verify.sh 30 3
 set -euo pipefail
 n="${1:-20}"
 expect="${2:-2}"
-url="$(terraform -chdir="$(dirname "$0")/../infra" output -raw lb_url)"
+url="${URL:-$(terraform -chdir="$(dirname "$0")/../infra" output -raw lb_url)}"
 echo "$url, $n requests, expecting $expect instances"
 
 results="$(for _ in $(seq "$n"); do

@@ -60,8 +60,15 @@ def main():
     left = []
     for kind, path in checks.items():
         for item in get(path) or []:
-            if str(item.get("name", "")).startswith(PREFIX):
+            # "kube_service_*": default name of a load balancer created by
+            # Kubernetes (level 2) when the Service sets no explicit name.
+            if str(item.get("name", "")).startswith((PREFIX, "kube_service")):
                 left.append(f"{kind}: {item.get('name')} ({item.get('id')})")
+    # Managed Kubernetes clusters (level 2): the list holds ids only.
+    for kube_id in get(f"{base}/kube") or []:
+        kube = get(f"{base}/kube/{kube_id}") or {}
+        if str(kube.get("name", "")).startswith(PREFIX):
+            left.append(f"kubernetes cluster: {kube.get('name')} ({kube_id})")
     # Floating IPs have no name: any unattached one in the region is suspicious.
     for fip in get(f"{base}/region/{REGION}/floatingip") or []:
         if not fip.get("associatedEntity"):

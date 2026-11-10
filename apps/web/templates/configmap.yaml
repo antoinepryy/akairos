@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-nginx
+data:
+  # The nginx image renders /etc/nginx/templates/*.template with envsubst at
+  # startup, substituting only variables defined in the environment.
+  default.conf.template: |
+    server {
+      listen 80;
+      location = /health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+      }
+      location / {
+        default_type text/html;
+        add_header Cache-Control "no-store";
+        return 200 '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${POD_NAME}</title>
+    <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,sans-serif;background:${APP_COLOR};color:#fff}main{text-align:center}h1{font-size:3rem;margin:0 0 1rem}p{margin:.3rem;font-size:1.2rem;opacity:.9}</style>
+    </head><body><main><h1 id="instance">${POD_NAME}</h1><p>node ${NODE_NAME}</p><p>pod ${POD_IP}</p><p>version ${APP_VERSION}</p></main></body></html>\n';
+      }
+    }

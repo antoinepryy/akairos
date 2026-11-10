@@ -1,0 +1,9 @@
+# "kubectl drain" of a node may not take the app below this.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: { app: web }
