@@ -20,7 +20,11 @@ mock_provider "ovh" {
 mock_provider "helm" {}
 
 variables {
-  admin_cidr = "203.0.113.7/32"
+  admin_cidr   = "203.0.113.7/32"
+  service_name = "test-project"
+  region       = "SBG5"
+  prefix       = "akairos"
+  git_repo_url = "https://github.com/antoinepryy/akairos.git"
   # The guard would call kubectl on the fake cluster at teardown.
   destroy_guard = false
 }
@@ -123,4 +127,68 @@ run "destroy_guard_on_by_default" {
     condition     = terraform_data.wait_app_gone.input.enabled
     error_message = "the load balancer guard runs on a real destroy"
   }
+}
+
+run "standard_private_nodes" {
+  command = plan
+  variables {
+    cluster_plan  = "standard"
+    private_nodes = true
+  }
+  assert {
+    condition     = ovh_cloud_project_kube.this.plan == "standard" && ovh_cloud_project_kube.this.disable_public_networking
+    error_message = "production profile: standard plan, nodes without public interface"
+  }
+}
+
+run "private_nodes_need_standard" {
+  command = plan
+  variables { private_nodes = true }
+  expect_failures = [var.private_nodes]
+}
+
+run "private_repo_deploy_key" {
+  command = plan
+  variables {
+    git_repo_url        = "git@github.com:client/platform.git"
+    git_ssh_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\nfake\n-----END OPENSSH PRIVATE KEY-----\n"
+  }
+  assert {
+    condition     = length(helm_release.argocd.values) == 2
+    error_message = "repository credentials passed to Argo CD"
+  }
+  assert {
+    condition     = yamldecode(helm_release.argocd.values[1]).configs.repositories.app.url == "git@github.com:client/platform.git"
+    error_message = "credentials bound to the application repository"
+  }
+}
+
+run "public_repo_no_credentials" {
+  command = plan
+  assert {
+    condition     = length(helm_release.argocd.values) == 1
+    error_message = "no repository secret for a public repository"
+  }
+}
+
+run "custom_app_namespace" {
+  command = plan
+  variables {
+    app_name      = "shop"
+    app_namespace = "shop"
+  }
+  assert {
+    condition     = yamldecode(helm_release.apps.values[0]).applications.shop.destination.namespace == "shop"
+    error_message = "Application name and namespace configurable"
+  }
+  assert {
+    condition     = terraform_data.wait_app_gone.input.namespace == "shop"
+    error_message = "destroy guard watches the app namespace"
+  }
+}
+
+run "bad_prefix" {
+  command = plan
+  variables { prefix = "Client_ACME" }
+  expect_failures = [var.prefix]
 }

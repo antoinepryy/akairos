@@ -6,3 +6,4 @@ crash.log
 kubeconfig*.yml
 __pycache__/
 *.tfplan
+modules/**/.terraform.lock.hcl

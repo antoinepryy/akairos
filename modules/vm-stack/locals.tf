@@ -10,5 +10,5 @@ locals {
   # "" only happens under mocked tests: a real instance always has one.
   app_ips = [for ips in local.app_fixed_ips : length(ips) > 0 ? ips[0] : ""]
 
-  ssh_public_key = trimspace(file(pathexpand(var.ssh_public_key_path)))
+  ssh_public_key = trimspace(var.ssh_public_key)
 }

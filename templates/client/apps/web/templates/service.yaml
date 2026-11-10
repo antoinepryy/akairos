@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  annotations:
+    # Kubernetes asks OVH for an Octavia load balancer with a floating IP. OVH
+    # names it kube_service_<cluster>_web_web (a name annotation is ignored).
+    loadbalancer.ovhcloud.com/flavor: small
+spec:
+  type: LoadBalancer
+  selector: { app: web }
+  ports:
+    - { name: http, port: 80, targetPort: http }

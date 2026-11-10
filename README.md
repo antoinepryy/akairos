@@ -34,6 +34,16 @@ Schéma détaillé : [`docs/architecture.html`](docs/architecture.html) (à ouvr
 | Instances | `akairos-app-N` (d2-2, Debian 13) | nginx, page avec le nom de l'instance, **sans IP publique** |
 | Pare-feu | security groups `akairos-bastion-sg`, `akairos-app-sg` | 22 depuis l'admin vers le bastion ; 80 depuis le sous-réseau et 22 depuis le bastion vers les app |
 
+## Organisation du dépôt
+
+| Dossier | Contenu |
+|---|---|
+| `modules/vm-stack` | Module du niveau 1 (VM, bastion, LB), sans valeur propre à un projet |
+| `modules/k8s-stack` | Module du niveau 2 (Kubernetes managé, Argo CD) |
+| `infra/`, `k8s/` | La démo de formation : ces modules avec les valeurs D&A Engineering |
+| `apps/web` | Chart de l'app de démo, suivi par Argo CD |
+| `templates/client` | Modèle de dépôt pour un client (voir « Répliquer pour un client ») |
+
 ## Prérequis
 
 - Terraform ≥ 1.9 (`brew install terraform`).
@@ -129,7 +139,19 @@ python3 scripts/check-leftovers.py           # « nothing left »
 
 **Coût** (HT) : ≈ 0,06 €/h (2 × d2-4 à 0,0206, LB small 0,0083, passerelle S 0,0028, IP flottante 0,0027). Le plan Free du cluster est gratuit ; le plan Standard coûterait 0,09 €/h de plus.
 
-**Tests hors ligne** : `terraform -chdir=k8s test` et `helm lint apps/web`.
+**Tests hors ligne** : `terraform -chdir=modules/k8s-stack test` et `helm lint apps/web`.
+
+## Répliquer pour un client
+
+Chaque client a **son propre dépôt** (privé), **dans son compte OVH** : projet, vRack, factures et state Terraform sont chez lui. Le dépôt appelle le module `k8s-stack` d'akairos **épinglé à une version** (tag git), si bien qu'une évolution d'akairos ne touche aucun client sans qu'on le décide.
+
+```bash
+scripts/new-client.sh ~/IdeaProjects/acme-platform "ACME" acme <id-projet> SBG5 acme-corp/platform
+```
+
+Le script copie `templates/client`, remplit les valeurs, épingle le dernier tag d'akairos et initialise git. La suite (compte de service, politique IAM, bucket du state, clé de déploiement, secrets, `plan`, `apply`) est dans le README du dépôt généré. Le profil par défaut est celui de la production : plan Standard, nœuds sans IP publique, 3 × b3-8.
+
+Publier une version du module : mettre à jour `CHANGELOG.md`, puis `git tag vX.Y.Z && git push --tags`.
 
 ## Bon à savoir
 
@@ -141,5 +163,5 @@ python3 scripts/check-leftovers.py           # « nothing left »
 - **IP privées** attribuées par OVH (DHCP) : l'API exige qu'une IP fixe soit dans la plage DHCP, ce qui exposerait à des collisions. Terraform relit les adresses après création.
 - **Image figée** : une instance garde l'image de sa création, même si OVH publie un Debian 13 plus récent (sinon un simple `apply` réinstallerait les machines en pleine démo). Pour changer : `terraform -chdir=infra apply -replace='ovh_cloud_instance.app[0]'`.
 - **Clé SSH posée par cloud-init**, pas comme « clé OVH » : supprimer une clé v2 laissait une copie dans le projet, et les créations simultanées se gênaient (409). Changer de clé réinstalle les instances : aucune ancienne clé ne reste autorisée.
-- **Tests hors ligne** (aucune ressource créée) : `terraform -chdir=infra test`.
+- **Tests hors ligne** (aucune ressource créée) : `terraform -chdir=modules/vm-stack test` et `terraform -chdir=modules/k8s-stack test`.
 - **Épingler une image ou un gabarit** : `-var image_name="Debian 13 - UEFI"`, `-var image_id=...`, `-var flavor_name=d2-4`, `-var region=GRA9`.

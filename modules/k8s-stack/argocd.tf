@@ -1,3 +1,26 @@
+locals {
+  argocd_base_values = yamlencode({
+    dex           = { enabled = false }
+    notifications = { enabled = false }
+    configs = {
+      # Poll git every 30 s instead of 3 min: a push shows up quickly.
+      cm     = { "timeout.reconciliation" = "30s", "timeout.reconciliation.jitter" = "0s" }
+      params = { "server.insecure" = true }
+    }
+  })
+
+  # Private repository: Argo CD reads it with a read-only deploy key.
+  argocd_repo_values = var.git_ssh_private_key == null ? [] : [yamlencode({
+    configs = {
+      repositories = {
+        app = { url = var.git_repo_url, type = "git", sshPrivateKey = var.git_ssh_private_key }
+      }
+    }
+  })]
+
+  argocd_values = concat([local.argocd_base_values], local.argocd_repo_values)
+}
+
 resource "helm_release" "argocd" {
   name             = "argocd"
   namespace        = "argocd"
@@ -7,15 +30,7 @@ resource "helm_release" "argocd" {
   version          = var.argocd_chart_version
   timeout          = 900
 
-  values = [yamlencode({
-    dex           = { enabled = false }
-    notifications = { enabled = false }
-    configs = {
-      # Poll git every 30 s instead of 3 min: a push shows up quickly in the demo.
-      cm     = { "timeout.reconciliation" = "30s", "timeout.reconciliation.jitter" = "0s" }
-      params = { "server.insecure" = true }
-    }
-  })]
+  values = local.argocd_values
 
   depends_on = [
     ovh_cloud_project_kube_nodepool.workers,
@@ -32,8 +47,9 @@ resource "helm_release" "argocd" {
 resource "terraform_data" "wait_app_gone" {
   input = {
     kubeconfig = ovh_cloud_project_kube.this.kubeconfig
-    script     = abspath("${path.module}/../scripts/k8s-wait-app-gone.sh")
+    script     = abspath("${path.module}/scripts/wait-app-gone.sh")
     enabled    = var.destroy_guard
+    namespace  = var.app_namespace
   }
 
   provisioner "local-exec" {
@@ -41,6 +57,7 @@ resource "terraform_data" "wait_app_gone" {
     environment = {
       KUBECONFIG_CONTENT = self.input.kubeconfig
       GUARD_ENABLED      = tostring(self.input.enabled)
+      APP_NAMESPACE      = self.input.namespace
     }
     command = self.input.script
   }
@@ -48,7 +65,7 @@ resource "terraform_data" "wait_app_gone" {
   depends_on = [helm_release.argocd]
 }
 
-# The Application: Argo CD keeps namespace "web" in sync with the chart in git.
+# The Application: Argo CD keeps var.app_namespace in sync with the chart in git.
 resource "helm_release" "apps" {
   name       = "argocd-apps"
   namespace  = "argocd"
@@ -58,7 +75,7 @@ resource "helm_release" "apps" {
 
   values = [yamlencode({
     applications = {
-      web = {
+      (var.app_name) = {
         namespace = "argocd"
         # Deleting the Application deletes what it deployed (Service and LB included).
         finalizers = ["resources-finalizer.argocd.argoproj.io"]
@@ -70,7 +87,7 @@ resource "helm_release" "apps" {
         }
         destination = {
           server    = "https://kubernetes.default.svc"
-          namespace = "web"
+          namespace = var.app_namespace
         }
         syncPolicy = {
           # selfHeal: a manual "kubectl scale" is reverted, git stays the truth.

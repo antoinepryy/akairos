@@ -1,16 +1,20 @@
 locals {
   gateway_ip = cidrhost(var.subnet_cidr, 1)
-  kube       = ovh_cloud_project_kube.this.kubeconfig_attributes[0]
 }
 
-# Free plan: the control plane costs nothing, only nodes and load balancers are billed.
+# Free plan: the control plane costs nothing, only nodes and load balancers are
+# billed. Standard (0.09 EUR/h on 2026-11-10): SLA, and nodes without public IP.
 resource "ovh_cloud_project_kube" "this" {
-  service_name       = var.service_name
-  region             = var.region
-  name               = "${var.prefix}-k8s"
-  plan               = "free"
-  private_network_id = ovh_cloud_network_private_vrack.this.id
-  nodes_subnet_id    = ovh_cloud_network_private_vrack_subnet.this.id
+  service_name = var.service_name
+  region       = var.region
+  name         = "${var.prefix}-k8s"
+  plan         = var.cluster_plan
+  version      = var.kube_version
+
+  # Nodes get no public interface at all (Standard plan only, creation only).
+  disable_public_networking = var.private_nodes ? true : null
+  private_network_id        = ovh_cloud_network_private_vrack.this.id
+  nodes_subnet_id           = ovh_cloud_network_private_vrack_subnet.this.id
 
   # Load balancers created by "Service type: LoadBalancer" land in this subnet.
   load_balancers_subnet_id = ovh_cloud_network_private_vrack_subnet.this.id

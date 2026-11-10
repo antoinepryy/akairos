@@ -11,11 +11,14 @@ mock_provider "ovh" {
 # Mocks cannot fake the nested lists of the flavor/image data sources,
 # so the lookups are pinned here (the lookup logic itself runs live).
 variables {
-  admin_cidr          = "203.0.113.7/32"
-  ssh_public_key_path = "./tests/fixtures/id_test.pub"
-  flavor_id           = "flavor-d2-2"
-  image_id            = "img-new"
-  lb_flavor_id        = "lb-small"
+  admin_cidr     = "203.0.113.7/32"
+  ssh_public_key = file("./tests/fixtures/id_test.pub")
+  service_name   = "test-project"
+  region         = "SBG5"
+  prefix         = "akairos"
+  flavor_id      = "flavor-d2-2"
+  image_id       = "img-new"
+  lb_flavor_id   = "lb-small"
 }
 
 run "defaults" {
