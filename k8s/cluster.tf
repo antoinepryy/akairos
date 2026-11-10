@@ -45,4 +45,7 @@ resource "ovh_cloud_project_kube_iprestrictions" "api" {
   service_name = var.service_name
   kube_id      = ovh_cloud_project_kube.this.id
   ips          = [var.admin_cidr, "${ovh_cloud_gateway.this.current_state.external_ip}/32"]
+
+  # OVH refuses the update while a node pool is INSTALLING (400 IntegrityError).
+  depends_on = [ovh_cloud_project_kube_nodepool.workers]
 }

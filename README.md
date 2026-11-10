@@ -108,11 +108,12 @@ kubectl -n web get pods -o wide
 ```
 
 1. **Répartition** : `scripts/verify.sh 30 3` (le nom du pod et du nœud changent).
+   Mesuré le 10/11/2026 : 30/30 en 200 sur les 3 pods.
 2. **Autoréparation** : `kubectl -n web delete pod <un pod>` ; un autre le remplace en quelques secondes. `kubectl -n web scale deploy web --replicas=1` est annulé par Argo CD : c'est git qui décide.
 3. **Mise à l'échelle par git** : `replicas: 5` dans [`apps/web/values.yaml`](apps/web/values.yaml), commit, push ; 30 s plus tard, 5 pods.
-4. **Mise à jour sans coupure** : dans un terminal, `scripts/verify.sh 300 1` ; dans l'autre, `version: v2` et `color: "#16a34a"`, commit, push. Les pods sont remplacés un par un (un en plus d'abord, sonde `/health`, 5 s de délai avant l'arrêt) : aucune requête en échec, la page passe au vert.
+4. **Mise à jour sans coupure** : dans un terminal, `scripts/verify.sh 300 1` ; dans l'autre, `version: v2` et `color: "#16a34a"`, commit, push. Les pods sont remplacés un par un (un en plus d'abord, sonde `/health`, 5 s de délai avant l'arrêt) : aucune requête en échec, la page passe au vert (mesuré : 251 requêtes sur 251 en 200, deux par seconde).
 5. **Retour arrière** : `git revert HEAD && git push`.
-6. **Perte d'un nœud** : `kubectl drain <nœud> --ignore-daemonsets --delete-emptydir-data` ; les pods migrent sur l'autre nœud, un seul à la fois (PodDisruptionBudget). `kubectl uncordon <nœud>` ensuite.
+6. **Perte d'un nœud** : `kubectl drain <nœud> --ignore-daemonsets --delete-emptydir-data` ; les pods migrent sur l'autre nœud, un seul à la fois (PodDisruptionBudget). `kubectl uncordon <nœud>` ensuite. Mesuré avec le retour arrière : 293 requêtes sur 293 en 200.
 7. **Interface Argo CD** (facultatif) : `kubectl -n argocd port-forward svc/argocd-server 8080:80`, puis <http://localhost:8080>, utilisateur `admin`, mot de passe : `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`.
 
 Fin de séance :
@@ -122,7 +123,9 @@ terraform -chdir=k8s destroy
 python3 scripts/check-leftovers.py           # « nothing left »
 ```
 
-**Piège géré** : le load balancer de l'app est créé par Kubernetes, Terraform ne le connaît pas. Si le cluster disparaissait avant lui, il resterait chez OVH, facturé. Au `destroy`, Terraform supprime donc d'abord l'Application Argo CD (qui supprime le Service), attend que le Service ait disparu (il ne disparaît qu'une fois le load balancer supprimé chez OVH), puis seulement Argo CD et le cluster. `check-leftovers` contrôle aussi les clusters et les load balancers `kube_service_*`.
+**Piège géré** : le load balancer de l'app est créé par Kubernetes, Terraform ne le connaît pas. Si le cluster disparaissait avant lui, il resterait chez OVH, facturé. Au `destroy`, Terraform supprime donc d'abord l'Application Argo CD (qui supprime le Service), attend que le Service ait disparu (il ne disparaît qu'une fois le load balancer supprimé chez OVH), puis seulement Argo CD et le cluster. `check-leftovers` contrôle aussi les clusters et les load balancers `kube_service_*` (OVH nomme ainsi le LB d'un Service et ignore l'annotation de nom).
+
+**Restriction d'IP de l'API** : OVH la refuse tant qu'un pool de nœuds est en cours d'installation (400 `IntegrityError`) ; Terraform la pose donc après les nœuds. Elle autorise ton IP et celle de la passerelle du cluster : Argo CD, dans le cluster, sort par cette passerelle.
 
 **Coût** (HT) : ≈ 0,06 €/h (2 × d2-4 à 0,0206, LB small 0,0083, passerelle S 0,0028, IP flottante 0,0027). Le plan Free du cluster est gratuit ; le plan Standard coûterait 0,09 €/h de plus.
 

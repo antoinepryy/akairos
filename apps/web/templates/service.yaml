@@ -3,9 +3,9 @@ kind: Service
 metadata:
   name: web
   annotations:
-    # Kubernetes asks OVH for an Octavia load balancer with a floating IP.
+    # Kubernetes asks OVH for an Octavia load balancer with a floating IP. OVH
+    # names it kube_service_<cluster>_web_web (a name annotation is ignored).
     loadbalancer.ovhcloud.com/flavor: small
-    loadbalancer.openstack.org/load-balancer-name: {{ .Values.loadBalancerName }}
 spec:
   type: LoadBalancer
   selector: { app: web }
