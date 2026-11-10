@@ -21,6 +21,8 @@ mock_provider "helm" {}
 
 variables {
   admin_cidr = "203.0.113.7/32"
+  # The guard would call kubectl on the fake cluster at teardown.
+  destroy_guard = false
 }
 
 run "cluster" {
@@ -112,4 +114,13 @@ run "admin_cidr_without_mask" {
   command = plan
   variables { admin_cidr = "203.0.113.7" }
   expect_failures = [var.admin_cidr]
+}
+
+run "destroy_guard_on_by_default" {
+  command = plan
+  variables { destroy_guard = true }
+  assert {
+    condition     = terraform_data.wait_app_gone.input.enabled
+    error_message = "the load balancer guard runs on a real destroy"
+  }
 }

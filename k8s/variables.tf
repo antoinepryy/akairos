@@ -83,3 +83,9 @@ variable "argocd_apps_chart_version" {
   type    = string
   default = "2.0.8"
 }
+
+variable "destroy_guard" {
+  description = "Wait for the app's load balancer to be gone before destroying the cluster. Only the offline tests turn it off."
+  type        = bool
+  default     = true
+}

@@ -32,24 +32,17 @@ resource "helm_release" "argocd" {
 resource "terraform_data" "wait_app_gone" {
   input = {
     kubeconfig = ovh_cloud_project_kube.this.kubeconfig
+    script     = abspath("${path.module}/../scripts/k8s-wait-app-gone.sh")
+    enabled    = var.destroy_guard
   }
 
   provisioner "local-exec" {
-    when        = destroy
-    interpreter = ["/bin/bash", "-c"]
-    environment = { KUBECONFIG_CONTENT = self.input.kubeconfig }
-    command     = <<-EOT
-      set -euo pipefail
-      cfg="$(mktemp)"; trap 'rm -f "$cfg"' EXIT
-      printf '%s' "$KUBECONFIG_CONTENT" > "$cfg"
-      for _ in $(seq 120); do
-        left="$(kubectl --kubeconfig "$cfg" -n web get svc -o name 2>/dev/null || true)"
-        [ -z "$left" ] && exit 0
-        sleep 5
-      done
-      echo "Service still present after 10 min: check the load balancers at OVH" >&2
-      exit 1
-    EOT
+    when = destroy
+    environment = {
+      KUBECONFIG_CONTENT = self.input.kubeconfig
+      GUARD_ENABLED      = tostring(self.input.enabled)
+    }
+    command = self.input.script
   }
 
   depends_on = [helm_release.argocd]
