@@ -10,7 +10,7 @@ Tout est chez le client : projet Public Cloud, vRack, factures OVH et state Terr
 
 1. **Projet Public Cloud** rattaché à un **vRack** (manager OVH). Noter l'id du projet.
 2. **Compte de service** : `POST /me/api/oauth2/client` avec `{"name":"terraform-__PREFIX__","description":"plateforme","flow":"CLIENT_CREDENTIALS","callbackUrls":[]}` ; noter `clientId` et `clientSecret` (affiché une seule fois). Lire son identité : `GET /me/api/oauth2/client/<clientId>`.
-3. **Politique IAM** limitée au projet : `POST /v2/iam/policy` avec `{"name":"terraform-__PREFIX__","identities":["<identity>"],"resources":[{"urn":"urn:v1:eu:resource:publicCloudProject:<id-projet>"}],"permissions":{"allow":[{"action":"publicCloudProject:apiovh:*"}]}}`.
+3. **Politique IAM** limitée au projet (elle donne tous les droits sur ce projet : n'y mettre ni sauvegardes ni données étrangères à la plateforme, les garder dans un autre projet) : `POST /v2/iam/policy` avec `{"name":"terraform-__PREFIX__","identities":["<identity>"],"resources":[{"urn":"urn:v1:eu:resource:publicCloudProject:<id-projet>"}],"permissions":{"allow":[{"action":"publicCloudProject:apiovh:*"}]}}`.
 4. **Bucket du state** : dans le projet, un utilisateur S3 et un bucket `__PREFIX__-tfstate` (région `__S3_REGION__`), versionné. C'est la seule copie de l'état de la plateforme.
 5. **Dépôt git privé** pour ce dossier, avec une **clé de déploiement en lecture seule** (`ssh-keygen -t ed25519 -f ~/.ssh/__PREFIX__-deploy -N ""`, la clé publique dans les « Deploy keys » du dépôt).
 6. **Secrets** sur le poste de l'opérateur, dans `~/.config/infra/secrets.env` (chmod 600), jamais dans le dépôt :
@@ -43,7 +43,9 @@ Contrôle : `python3 <akairos>/scripts/check-leftovers.py` liste ce qui porte le
 - **Ajouter une app** : un chart par dossier dans `apps/`. Pour une deuxième Application, dupliquer le module ou étendre `app_*` (une Application par module à ce jour).
 - **Monter de version le socle** : changer `?ref=` dans `main.tf` (lire le CHANGELOG d'akairos), `terraform init -upgrade`, puis `plan`.
 - **Version de Kubernetes** : figée par `kube_version` dans `client.tfvars`, pour qu'une recréation donne la même. La monter exprès (versions proposées : `GET /cloud/project/{id}/capabilities/kube/versions`), une mineure à la fois, puis `plan`.
-- **Accès à l'API Kubernetes** : seulement depuis `admin_cidr` (IP de l'opérateur, détectée par env.sh) et la passerelle de la plateforme. Changement d'IP : `source env.sh`, puis `plan` / `apply`.
+- **Accès à l'API Kubernetes** : seulement depuis `admin_cidr` (IP de l'opérateur, détectée par env.sh) et la passerelle de la plateforme. Si l'IP de l'opérateur a changé, un `plan` normal échoue (Terraform relit Helm sur une API qui la refuse) : `source env.sh`, puis `terraform apply -refresh=false -target=module.platform.ovh_cloud_project_kube_iprestrictions.api -var-file=client.tfvars`, puis `plan` normalement.
+- **Ce que les apps peuvent déployer** : leur projet Argo CD n'autorise que ce dépôt, le namespace `app_namespace` et des ressources applicatives (variable `app_resource_kinds` du module). Le namespace applique Pod Security `restricted` : une image qui tourne en root est refusée (prendre une image non privilégiée, comme `apps/web`).
+- **Interface Argo CD** : `kubectl -n argocd port-forward svc/argocd-server 8080:80`, puis <http://localhost:8080> (elle n'est pas exposée, et refusée aux pods des autres namespaces).
 
 ## 4. Avant la mise en production (selon ce que le client héberge)
 

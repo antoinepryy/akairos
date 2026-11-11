@@ -134,6 +134,7 @@ resource "terraform_data" "wait_app_gone" {
     script    = file("${path.module}/scripts/wait-app-gone.sh")
     enabled   = var.destroy_guard
     namespace = var.app_namespace
+    app       = var.app_name
   }
 
   provisioner "local-exec" {
@@ -142,6 +143,7 @@ resource "terraform_data" "wait_app_gone" {
       KUBECONFIG_CONTENT = self.input.kubeconfig
       GUARD_ENABLED      = tostring(self.input.enabled)
       APP_NAMESPACE      = self.input.namespace
+      APP_NAME           = self.input.app
     }
     interpreter = ["bash", "-c"]
     command     = self.input.script

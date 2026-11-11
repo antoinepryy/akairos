@@ -93,6 +93,7 @@ class DestroyGuard(unittest.TestCase):
                 "#!/bin/sh\n"
                 'case "$FAKE_MODE" in\n'
                 '  present) echo service/web ;;\n'
+                '  finalizing) case "$*" in *applications*) echo application/web ;; esac ;;\n'
                 '  absent) ;;\n'
                 '  error) echo "Unable to connect" >&2; exit 1 ;;\n'
                 "esac\n")
@@ -110,6 +111,11 @@ class DestroyGuard(unittest.TestCase):
         r = self.run_guard("present")
         self.assertEqual(r.returncode, 1)
         self.assertIn("still present", r.stderr)
+
+    def test_application_still_finalizing_blocks_destroy(self):
+        r = self.run_guard("finalizing")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("application/web", r.stderr)
 
     def test_kubectl_error_never_counts_as_gone(self):
         r = self.run_guard("error")

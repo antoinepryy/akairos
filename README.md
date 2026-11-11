@@ -137,6 +137,20 @@ python3 scripts/check-leftovers.py           # « nothing left »
 
 **Restriction d'IP de l'API** : OVH la refuse tant qu'un pool de nœuds est en cours d'installation (400 `IntegrityError`) ; Terraform la pose donc après les nœuds. Elle autorise ton IP et celle de la passerelle du cluster : Argo CD, dans le cluster, sort par cette passerelle.
 
+**Sécurité du cluster** (v1.1.0) :
+- L'app a son **projet Argo CD** : elle ne lit que ce dépôt, ne déploie que dans son namespace et seulement des ressources applicatives (Deployment, Service, ConfigMap…). Ni ClusterRoleBinding, ni Role, ni autre namespace : un commit dans le dépôt ne peut pas se donner de droits sur le cluster.
+- Son namespace applique le profil **Pod Security `restricted`** : nginx tourne sans root (image `nginx-unprivileged`, port 8080, épinglée par digest), système de fichiers en lecture seule, aucune capability, sans jeton Kubernetes.
+- **NetworkPolicies** : tout est refusé par défaut dans `web` et `argocd`. Les pods web n'acceptent que le port 8080. L'interface Argo CD n'est joignable que depuis son propre namespace (et par `port-forward`, qui passe par le kubelet).
+- Vérifié sur un cluster local (kind, 3 nœuds) le 2026-11-11 : un ClusterRoleBinding et un déploiement dans `kube-system` sont refusés par le projet, un pod root est refusé par le namespace, l'interface Argo CD ne répond pas à un pod d'un autre namespace.
+
+**Ton IP a changé** depuis le dernier `apply` : un `plan` normal échoue, car Terraform relit les releases Helm sur une API qui refuse ta nouvelle IP. Mettre à jour la seule restriction, sans relecture :
+
+```bash
+source env.sh
+terraform -chdir=k8s apply -refresh=false -target=module.k8s.ovh_cloud_project_kube_iprestrictions.api
+terraform -chdir=k8s plan        # redevient normal
+```
+
 **Coût** (HT) : ≈ 0,06 €/h (2 × d2-4 à 0,0206, LB small 0,0083, passerelle S 0,0028, IP flottante 0,0027). Le plan Free du cluster est gratuit ; le plan Standard coûterait 0,09 €/h de plus.
 
 **Tests hors ligne** : `terraform -chdir=modules/k8s-stack test`, `helm lint apps/web` et `python3 -m unittest discover -s tests` (garde-fou de destruction avec un faux `kubectl`).

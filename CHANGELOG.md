@@ -3,6 +3,29 @@
 Versions of the modules (`modules/vm-stack`, `modules/k8s-stack`) that client
 repositories pin with `?ref=vX.Y.Z`.
 
+## v1.1.0 (2026-11-11)
+
+Cluster hardening (audit follow-up). Checked on a local kind cluster; live run
+at OVH: see the end of this entry.
+
+- `k8s-stack`: the app has its own Argo CD project (its repository, its
+  namespace, namespaced app kinds only: `app_resource_kinds`) instead of
+  `default`. A commit can no longer create a ClusterRoleBinding or deploy
+  elsewhere. The project is a separate release, removed after the Application.
+- `k8s-stack`: the app's namespace enforces Pod Security `restricted`.
+- `k8s-stack`: network policies. Default deny in `argocd`, argocd-server
+  reachable from its own namespace only (the chart's policy allowed any source).
+- `k8s-stack`: the destroy guard also waits for the Application to be fully
+  deleted (its finalizer removes everything it deployed), not only the Service.
+- `apps/web`: unprivileged nginx on 8080 pinned by digest, read-only root
+  filesystem, no capability, no service account token, default-deny network
+  policy, values schema (at least 2 replicas).
+- Docs: recovery when the operator's IP changed (`-refresh=false -target`),
+  IAM scope of the client's service account.
+- Breaking for apps deployed with the module: images running as root are
+  refused in the app's namespace, and only the kinds of `app_resource_kinds`
+  are synced.
+
 ## v1.0.1 (2026-11-11)
 
 Fixes from an audit (Codex, read-only), no change to the created resources.
