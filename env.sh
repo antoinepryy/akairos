@@ -5,13 +5,15 @@
 # IAM identity some v2 actions require (e.g. loadbalancer/usePublicIP).
 # A trainee exports OVH_CLIENT_ID / OVH_CLIENT_SECRET themselves (see README).
 
+# Read one variable of the secrets file in a subshell: the other secrets it
+# holds never reach this shell nor terraform and its providers.
+_akairos_secret() {
+  # shellcheck disable=SC1090,SC1091
+  ( . "$HOME/.config/infra/secrets.env" >/dev/null 2>&1; eval "printf '%s' \"\${$1:-}\"" )
+}
 if [ -f "$HOME/.config/infra/secrets.env" ] && [ -z "${OVH_CLIENT_ID:-}" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . "$HOME/.config/infra/secrets.env"
-  set +a
-  export OVH_CLIENT_ID="$OVH_AKAIROS_CLIENT_ID"
-  export OVH_CLIENT_SECRET="$OVH_AKAIROS_CLIENT_SECRET"
+  OVH_CLIENT_ID="$(_akairos_secret OVH_AKAIROS_CLIENT_ID)"; export OVH_CLIENT_ID
+  OVH_CLIENT_SECRET="$(_akairos_secret OVH_AKAIROS_CLIENT_SECRET)"; export OVH_CLIENT_SECRET
   # Antoine's project also holds the off-site backups: check they survive.
   export CHECK_BUCKET="${CHECK_BUCKET:-EU-WEST-PAR/dna-backups-cronos}"
 fi

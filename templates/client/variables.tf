@@ -22,6 +22,11 @@ variable "cluster_plan" {
   default = "standard"
 }
 
+variable "kube_version" {
+  description = "Kubernetes minor version, pinned so that a re-creation gives the same one (upgrade on purpose)."
+  type        = string
+}
+
 variable "private_nodes" {
   type    = bool
   default = true

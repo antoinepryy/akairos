@@ -3,4 +3,5 @@
 *.tfstate.*
 *.tfplan
 kubeconfig*.yml
+kubeconfig.yml.*
 crash.log

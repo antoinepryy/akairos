@@ -39,6 +39,7 @@ module "platform" {
   prefix              = var.prefix
   admin_cidr          = var.admin_cidr
   cluster_plan        = var.cluster_plan
+  kube_version        = var.kube_version
   private_nodes       = var.private_nodes
   node_flavor         = var.node_flavor
   node_count          = var.node_count

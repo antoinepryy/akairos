@@ -25,6 +25,7 @@ ERRORS = []
 
 
 TOKEN_URL = "https://www.ovh.com/auth/oauth2/token"
+TIMEOUT = 20  # seconds per request: a hung connection is an error, not a wait
 _token = None
 
 
@@ -35,17 +36,23 @@ def token():
             "grant_type": "client_credentials", "scope": "all",
             "client_id": os.environ["OVH_CLIENT_ID"], "client_secret": os.environ["OVH_CLIENT_SECRET"],
         }).encode()
-        _token = json.loads(urllib.request.urlopen(TOKEN_URL, data=body).read())["access_token"]
+        _token = json.loads(urllib.request.urlopen(TOKEN_URL, data=body, timeout=TIMEOUT).read())["access_token"]
     return _token
 
 
-def get(path):
+def get(path, expect=list):
+    """GET path; any failure or a body of another type than `expect` is an
+    error (an empty or malformed answer must never read as "nothing left")."""
     try:
         req = urllib.request.Request(API + path, headers={"Authorization": "Bearer " + token()})
-        return json.loads(urllib.request.urlopen(req).read() or "null")
-    except (urllib.error.URLError, ValueError, KeyError) as e:
+        data = json.loads(urllib.request.urlopen(req, timeout=TIMEOUT).read())
+    except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
         ERRORS.append(f"GET {path}: {e}")
-        return []
+        return expect()
+    if not isinstance(data, expect) or (expect is list and not all(isinstance(i, (dict, str)) for i in data)):
+        ERRORS.append(f"GET {path}: unexpected answer {type(data).__name__}")
+        return expect()
+    return data
 
 
 def main():
@@ -59,25 +66,28 @@ def main():
     }
     left = []
     for kind, path in checks.items():
-        for item in get(path) or []:
+        for item in get(path):
+            if not isinstance(item, dict):
+                ERRORS.append(f"GET {path}: unexpected item {item!r}")
+                continue
             # "kube_service_*": default name of a load balancer created by
             # Kubernetes (level 2) when the Service sets no explicit name.
             if str(item.get("name", "")).startswith((PREFIX, "kube_service")):
                 left.append(f"{kind}: {item.get('name')} ({item.get('id')})")
     # Managed Kubernetes clusters (level 2): the list holds ids only.
-    for kube_id in get(f"{base}/kube") or []:
-        kube = get(f"{base}/kube/{kube_id}") or {}
+    for kube_id in get(f"{base}/kube"):
+        kube = get(f"{base}/kube/{kube_id}", expect=dict)
         if str(kube.get("name", "")).startswith(PREFIX):
             left.append(f"kubernetes cluster: {kube.get('name')} ({kube_id})")
     # Floating IPs have no name: any unattached one in the region is suspicious.
-    for fip in get(f"{base}/region/{REGION}/floatingip") or []:
-        if not fip.get("associatedEntity"):
+    for fip in get(f"{base}/region/{REGION}/floatingip"):
+        if isinstance(fip, dict) and not fip.get("associatedEntity"):
             left.append(f"floating ip (unattached): {fip.get('ip')} ({fip.get('id')})")
 
     bucket_ok = True
     if CHECK_BUCKET:
         region, bucket = CHECK_BUCKET.split("/", 1)
-        buckets = [b.get("name") for b in get(f"{base}/region/{region}/storage") or []]
+        buckets = [b.get("name") for b in get(f"{base}/region/{region}/storage") if isinstance(b, dict)]
         bucket_ok = bucket in buckets
         print(f"bucket {bucket}: {'present' if bucket_ok else 'MISSING'}")
 

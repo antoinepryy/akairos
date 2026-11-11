@@ -42,6 +42,7 @@ Contrôle : `python3 <akairos>/scripts/check-leftovers.py` liste ce qui porte le
 - **Déployer** : modifier `apps/`, commit, push. Argo CD applique en 30 s environ. Un changement fait à la main dans le cluster est annulé : git fait foi.
 - **Ajouter une app** : un chart par dossier dans `apps/`. Pour une deuxième Application, dupliquer le module ou étendre `app_*` (une Application par module à ce jour).
 - **Monter de version le socle** : changer `?ref=` dans `main.tf` (lire le CHANGELOG d'akairos), `terraform init -upgrade`, puis `plan`.
+- **Version de Kubernetes** : figée par `kube_version` dans `client.tfvars`, pour qu'une recréation donne la même. La monter exprès (versions proposées : `GET /cloud/project/{id}/capabilities/kube/versions`), une mineure à la fois, puis `plan`.
 - **Accès à l'API Kubernetes** : seulement depuis `admin_cidr` (IP de l'opérateur, détectée par env.sh) et la passerelle de la plateforme. Changement d'IP : `source env.sh`, puis `plan` / `apply`.
 
 ## 4. Avant la mise en production (selon ce que le client héberge)

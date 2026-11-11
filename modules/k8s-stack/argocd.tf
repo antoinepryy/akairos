@@ -47,9 +47,11 @@ resource "helm_release" "argocd" {
 resource "terraform_data" "wait_app_gone" {
   input = {
     kubeconfig = ovh_cloud_project_kube.this.kubeconfig
-    script     = abspath("${path.module}/scripts/wait-app-gone.sh")
-    enabled    = var.destroy_guard
-    namespace  = var.app_namespace
+    # The script's content, not its path: the destroy may run from another
+    # machine or checkout than the apply that wrote the state.
+    script    = file("${path.module}/scripts/wait-app-gone.sh")
+    enabled   = var.destroy_guard
+    namespace = var.app_namespace
   }
 
   provisioner "local-exec" {
@@ -59,7 +61,8 @@ resource "terraform_data" "wait_app_gone" {
       GUARD_ENABLED      = tostring(self.input.enabled)
       APP_NAMESPACE      = self.input.namespace
     }
-    command = self.input.script
+    interpreter = ["bash", "-c"]
+    command     = self.input.script
   }
 
   depends_on = [helm_release.argocd]

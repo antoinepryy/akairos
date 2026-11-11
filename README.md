@@ -139,7 +139,7 @@ python3 scripts/check-leftovers.py           # « nothing left »
 
 **Coût** (HT) : ≈ 0,06 €/h (2 × d2-4 à 0,0206, LB small 0,0083, passerelle S 0,0028, IP flottante 0,0027). Le plan Free du cluster est gratuit ; le plan Standard coûterait 0,09 €/h de plus.
 
-**Tests hors ligne** : `terraform -chdir=modules/k8s-stack test` et `helm lint apps/web`.
+**Tests hors ligne** : `terraform -chdir=modules/k8s-stack test`, `helm lint apps/web` et `python3 -m unittest discover -s tests` (garde-fou de destruction avec un faux `kubectl`).
 
 ## Répliquer pour un client
 
@@ -149,7 +149,7 @@ Chaque client a **son propre dépôt** (privé), **dans son compte OVH** : proje
 scripts/new-client.sh ~/IdeaProjects/acme-platform "ACME" acme <id-projet> SBG5 acme-corp/platform
 ```
 
-Le script copie `templates/client`, remplit les valeurs, épingle le dernier tag d'akairos et initialise git. La suite (compte de service, politique IAM, bucket du state, clé de déploiement, secrets, `plan`, `apply`) est dans le README du dépôt généré. Le profil par défaut est celui de la production : plan Standard, nœuds sans IP publique, 3 × b3-8.
+Le script prend `templates/client` **dans le dernier tag** d'akairos (pas dans la copie de travail : le dépôt généré correspond à la version du module qu'il épingle), remplit les valeurs et initialise git. La suite (compte de service, politique IAM, bucket du state, clé de déploiement, secrets, `plan`, `apply`) est dans le README du dépôt généré. Le profil par défaut est celui de la production : plan Standard, nœuds sans IP publique, 3 × b3-8.
 
 Publier une version du module : mettre à jour `CHANGELOG.md`, puis `git tag vX.Y.Z && git push --tags`.
 
@@ -163,5 +163,5 @@ Publier une version du module : mettre à jour `CHANGELOG.md`, puis `git tag vX.
 - **IP privées** attribuées par OVH (DHCP) : l'API exige qu'une IP fixe soit dans la plage DHCP, ce qui exposerait à des collisions. Terraform relit les adresses après création.
 - **Image figée** : une instance garde l'image de sa création, même si OVH publie un Debian 13 plus récent (sinon un simple `apply` réinstallerait les machines en pleine démo). Pour changer : `terraform -chdir=infra apply -replace='ovh_cloud_instance.app[0]'`.
 - **Clé SSH posée par cloud-init**, pas comme « clé OVH » : supprimer une clé v2 laissait une copie dans le projet, et les créations simultanées se gênaient (409). Changer de clé réinstalle les instances : aucune ancienne clé ne reste autorisée.
-- **Tests hors ligne** (aucune ressource créée) : `terraform -chdir=modules/vm-stack test` et `terraform -chdir=modules/k8s-stack test`.
+- **Tests hors ligne** (aucune ressource créée) : `terraform -chdir=modules/vm-stack test`, `terraform -chdir=modules/k8s-stack test` et `python3 -m unittest discover -s tests` (scripts : inventaire OVH simulé, garde-fou de destruction, génération d'un dépôt client depuis un clone neuf).
 - **Épingler une image ou un gabarit** : `-var image_name="Debian 13 - UEFI"`, `-var image_id=...`, `-var flavor_name=d2-4`, `-var region=GRA9`.

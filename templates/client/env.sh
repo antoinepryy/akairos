@@ -2,16 +2,27 @@
 # Source me: `source env.sh`. Contains no secret: values come from
 # ~/.config/infra/secrets.env, under the names below.
 SECRETS="${SECRETS:-$HOME/.config/infra/secrets.env}"
-if [ -f "$SECRETS" ]; then set -a; . "$SECRETS"; set +a; fi
-
-export OVH_CLIENT_ID="${__ENV__CLIENT_ID:?missing __ENV__CLIENT_ID in $SECRETS}"
-export OVH_CLIENT_SECRET="${__ENV__CLIENT_SECRET:?missing __ENV__CLIENT_SECRET}"
-export AWS_ACCESS_KEY_ID="${__ENV__S3_ACCESS_KEY:?missing __ENV__S3_ACCESS_KEY}"
-export AWS_SECRET_ACCESS_KEY="${__ENV__S3_SECRET_KEY:?missing __ENV__S3_SECRET_KEY}"
+# Only this client's values leave the secrets file (read in a subshell): the
+# secrets of other clients never reach this shell nor terraform.
+_secret() {
+  # shellcheck disable=SC1090,SC1091
+  [ -f "$SECRETS" ] && ( . "$SECRETS" >/dev/null 2>&1; eval "printf '%s' \"\${$1:-}\"" )
+}
+_require() {
+  _v="$(_secret "$2")"
+  if [ -z "$_v" ]; then echo "missing $2 in $SECRETS" >&2; return 1; fi
+  export "$1=$_v"; unset _v
+}
+_require OVH_CLIENT_ID __ENV__CLIENT_ID || return 1
+_require OVH_CLIENT_SECRET __ENV__CLIENT_SECRET || return 1
+_require AWS_ACCESS_KEY_ID __ENV__S3_ACCESS_KEY || return 1
+_require AWS_SECRET_ACCESS_KEY __ENV__S3_SECRET_KEY || return 1
 # Optional: deploy key of the repository, for Argo CD.
-if [ -n "${__ENV__DEPLOY_KEY_FILE:-}" ]; then
-  TF_VAR_git_ssh_private_key="$(cat "$__ENV__DEPLOY_KEY_FILE")"; export TF_VAR_git_ssh_private_key
+_key_file="$(_secret __ENV__DEPLOY_KEY_FILE)"
+if [ -n "$_key_file" ]; then
+  TF_VAR_git_ssh_private_key="$(cat "$_key_file")"; export TF_VAR_git_ssh_private_key
 fi
+unset _key_file
 unset OVH_APPLICATION_KEY OVH_APPLICATION_SECRET OVH_CONSUMER_KEY
 export OVH_ENDPOINT="${OVH_ENDPOINT_OVERRIDE:-ovh-eu}"
 

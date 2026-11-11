@@ -2,8 +2,11 @@
 *.tfstate
 *.tfstate.*
 *.tfvars
+# Non-secret settings of a client, generated from the template: committed.
+!templates/client/client.tfvars
 crash.log
 kubeconfig*.yml
+kubeconfig.yml.*
 __pycache__/
 *.tfplan
 modules/**/.terraform.lock.hcl
