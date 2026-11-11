@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 # Source me: `source env.sh`. Contains no secret.
 # Auth: an OVH service account (OAuth2 client credentials) whose IAM policy is
-# limited to the Public Cloud project. Legacy application keys cannot carry the
-# IAM identity some v2 actions require (e.g. loadbalancer/usePublicIP).
+# limited to the Public Cloud project. Legacy application keys carry no IAM
+# identity, which some v2 actions check. Not enough for everything though:
+# loadbalancer/usePublicIP is refused even to the service account (README).
 # A trainee exports OVH_CLIENT_ID / OVH_CLIENT_SECRET themselves (see README).
 
 # Read one variable of the secrets file in a subshell: the other secrets it

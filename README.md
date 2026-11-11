@@ -143,7 +143,7 @@ python3 scripts/check-leftovers.py           # « nothing left »
 - **NetworkPolicies** : tout est refusé par défaut dans `web` et `argocd`. Les pods web n'acceptent que le port 8080. L'interface Argo CD n'est joignable que depuis son propre namespace (et par `port-forward`, qui passe par le kubelet).
 - Vérifié sur un cluster local (kind, 3 nœuds) le 2026-11-11 : un ClusterRoleBinding et un déploiement dans `kube-system` sont refusés par le projet, un pod root est refusé par le namespace, l'interface Argo CD ne répond pas à un pod d'un autre namespace.
 
-**Ton IP a changé** depuis le dernier `apply` : un `plan` normal échoue, car Terraform relit les releases Helm sur une API qui refuse ta nouvelle IP. Mettre à jour la seule restriction, sans relecture :
+**Ton IP a changé** depuis le dernier `apply` : l'API Kubernetes refuse ta nouvelle IP, et le provider Helm, au lieu d'échouer, croit les releases disparues. Le `plan` normal propose alors de **recréer Argo CD, le projet et l'app : ne surtout pas l'appliquer** (l'installation échouerait et le state perdrait les releases, donc le garde-fou du `destroy`). Constaté sur OVH le 2026-11-11. Mettre à jour la seule restriction, sans relecture :
 
 ```bash
 source env.sh

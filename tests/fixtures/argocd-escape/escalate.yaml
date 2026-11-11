@@ -1,4 +1,4 @@
-# Test fixture (tests/kind.sh): what a malicious commit in the app's repository
+# Test fixture (kind lab, README "Sécurité du cluster"): what a malicious commit in the app's repository
 # could try. The app's Argo CD project must refuse to sync it.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

@@ -5,8 +5,12 @@ repositories pin with `?ref=vX.Y.Z`.
 
 ## v1.1.0 (2026-11-11)
 
-Cluster hardening (audit follow-up). Checked on a local kind cluster; live run
-at OVH: see the end of this entry.
+Cluster hardening (audit follow-up). Checked on a local kind cluster, then live
+at OVH SBG5 on 2026-11-11 (free plan, 2 x d2-4): created in 10 min 50 in one
+apply; the OVH load balancer reaches the pods through the network policy (30/30,
+3 pods); ClusterRoleBinding, deployment to kube-system and root pod refused;
+Argo CD UI times out from another namespace, answers from argocd and through
+port-forward; self-heal; IP-change recovery; destroy in 2 min 40, nothing left.
 
 - `k8s-stack`: the app has its own Argo CD project (its repository, its
   namespace, namespaced app kinds only: `app_resource_kinds`) instead of
@@ -21,7 +25,9 @@ at OVH: see the end of this entry.
   filesystem, no capability, no service account token, default-deny network
   policy, values schema (at least 2 replicas).
 - Docs: recovery when the operator's IP changed (`-refresh=false -target`),
-  IAM scope of the client's service account.
+  IAM scope of the client's service account. Found live: with the API refusing
+  the operator's IP, the Helm provider reads the releases as gone and a normal
+  plan proposes to re-create Argo CD and the apps; it must not be applied.
 - Breaking for apps deployed with the module: images running as root are
   refused in the app's namespace, and only the kinds of `app_resource_kinds`
   are synced.
