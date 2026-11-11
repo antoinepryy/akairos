@@ -122,6 +122,26 @@ variable "app_path" {
   default     = "apps/web"
 }
 
+variable "app_resource_kinds" {
+  description = "Namespaced kinds the app's Argo CD project may deploy (no Role, RoleBinding nor ResourceQuota)."
+  type        = list(object({ group = string, kind = string }))
+  default = [
+    { group = "", kind = "ConfigMap" },
+    { group = "", kind = "Secret" },
+    { group = "", kind = "Service" },
+    { group = "", kind = "ServiceAccount" },
+    { group = "", kind = "PersistentVolumeClaim" },
+    { group = "apps", kind = "Deployment" },
+    { group = "apps", kind = "StatefulSet" },
+    { group = "batch", kind = "Job" },
+    { group = "batch", kind = "CronJob" },
+    { group = "policy", kind = "PodDisruptionBudget" },
+    { group = "autoscaling", kind = "HorizontalPodAutoscaler" },
+    { group = "networking.k8s.io", kind = "NetworkPolicy" },
+    { group = "networking.k8s.io", kind = "Ingress" },
+  ]
+}
+
 variable "argocd_chart_version" {
   type    = string
   default = "10.17.1"

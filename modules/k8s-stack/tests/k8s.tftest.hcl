@@ -192,3 +192,47 @@ run "bad_prefix" {
   variables { prefix = "Client_ACME" }
   expect_failures = [var.prefix]
 }
+
+run "app_restricted_project" {
+  assert {
+    condition     = yamldecode(helm_release.apps.values[0]).applications.web.project == "web"
+    error_message = "the Application must not use the unrestricted default project"
+  }
+  assert {
+    condition     = yamldecode(helm_release.project.values[0]).projects.web.sourceRepos == ["https://github.com/antoinepryy/akairos.git"]
+    error_message = "the project reads only the app's repository"
+  }
+  assert {
+    condition     = [for d in yamldecode(helm_release.project.values[0]).projects.web.destinations : d.namespace] == ["web"]
+    error_message = "the project deploys only to the app's namespace"
+  }
+  assert {
+    condition     = yamldecode(helm_release.project.values[0]).projects.web.clusterResourceWhitelist == [{ group = "", kind = "Namespace" }]
+    error_message = "no cluster-scoped resource but the namespace"
+  }
+  assert {
+    condition = length([for k in yamldecode(helm_release.project.values[0]).projects.web.namespaceResourceWhitelist : k
+    if contains(["Role", "RoleBinding", "ResourceQuota", "LimitRange"], k.kind)]) == 0
+    error_message = "the app may not grant itself rights nor lift its quotas"
+  }
+  assert {
+    condition     = yamldecode(helm_release.apps.values[0]).applications.web.syncPolicy.managedNamespaceMetadata.labels["pod-security.kubernetes.io/enforce"] == "restricted"
+    error_message = "Pod Security restricted on the app's namespace"
+  }
+}
+
+run "argocd_network_policies" {
+  assert {
+    condition     = yamldecode(helm_release.argocd.values[0]).global.networkPolicy.create == false && yamldecode(helm_release.argocd.values[0]).server.networkPolicy.create == false
+    error_message = "the chart's permissive argocd-server policy must not be rendered"
+  }
+  assert {
+    condition = alltrue([for c in ["controller", "repoServer", "redis", "applicationSet"] :
+    yamldecode(helm_release.argocd.values[0])[c].networkPolicy.create])
+    error_message = "the chart's restrictive policies stay"
+  }
+  assert {
+    condition     = toset([for o in yamldecode(helm_release.argocd.values[0]).extraObjects : o.metadata.name]) == toset(["default-deny-ingress", "argocd-server-same-namespace"])
+    error_message = "default deny plus argocd-server reachable from its namespace only"
+  }
+}

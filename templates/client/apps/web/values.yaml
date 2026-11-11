@@ -5,4 +5,6 @@ replicas: 3
 version: v1
 color: "#2563eb"
 
-image: nginx:1.30-alpine
+# Unprivileged nginx (uid 101, port 8080), pinned by digest: every node runs
+# exactly the same image. Pod Security "restricted" refuses the root image.
+image: nginxinc/nginx-unprivileged:1.30-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03

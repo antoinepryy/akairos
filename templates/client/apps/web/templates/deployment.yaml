@@ -24,11 +24,18 @@ spec:
           labelSelector:
             matchLabels: { app: web }
       terminationGracePeriodSeconds: 30
+      # The app does not call the Kubernetes API: no token in the pod.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: nginx
           image: {{ .Values.image }}
           ports:
-            - { name: http, containerPort: 80 }
+            - { name: http, containerPort: 8080 }
           env:
             - name: POD_NAME
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
@@ -49,11 +56,22 @@ spec:
             # Let endpoints and the load balancer forget the pod before nginx stops.
             preStop:
               exec: { command: ["sleep", "5"] }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
           resources:
             requests: { cpu: 20m, memory: 32Mi }
             limits: { memory: 64Mi }
           volumeMounts:
-            - { name: nginx-templates, mountPath: /etc/nginx/templates }
+            - { name: nginx-templates, mountPath: /etc/nginx/templates, readOnly: true }
+            # Read-only image: the rendered config and nginx's pid and temp files.
+            - { name: nginx-conf, mountPath: /etc/nginx/conf.d }
+            - { name: tmp, mountPath: /tmp }
       volumes:
         - name: nginx-templates
           configMap: { name: web-nginx }
+        - name: nginx-conf
+          emptyDir: { sizeLimit: 1Mi }
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
