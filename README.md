@@ -42,6 +42,7 @@ Schéma détaillé : [`docs/architecture.html`](docs/architecture.html) (à ouvr
 | `modules/k8s-stack` | Module du niveau 2 (Kubernetes managé, Argo CD) |
 | `infra/`, `k8s/` | La démo de formation : ces modules avec les valeurs D&A Engineering |
 | `apps/web` | Chart de l'app de démo, suivi par Argo CD |
+| `bedrock/`, `apps/bedrock`, `images/bedrock-site` | La démo WordPress Bedrock du dépôt docker-swarm sur Kubernetes : aide-mémoire dans `bedrock/README.md` |
 | `templates/client` | Modèle de dépôt pour un client (voir « Répliquer pour un client ») |
 
 ## Prérequis

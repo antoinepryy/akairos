@@ -10,6 +10,42 @@ Internet ─▶ load balancer OVH ─▶ Traefik ×2 ─▶ WordPress ×3 ─┬
                                                               └─▶ S3 OVH (médias, préfixe k8s/)
 ```
 
+## Aide-mémoire (relancer pour une formation)
+
+Tout depuis la racine du dépôt, branche `bedrock`. Environ 15 min, ≈ 0,13 € HT/h
+tant que c'est allumé (≈ 92 € HT/mois) : détruire en fin de séance.
+
+```bash
+# 1. Monter (~12 min) et créer les secrets
+source env.sh
+terraform -chdir=bedrock apply
+eval "$(scripts/k8s-kubeconfig.sh bedrock)"
+scripts/bedrock-secrets.sh
+
+# 2. IP du load balancer (change à chaque création)
+kubectl -n traefik get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}'; echo
+
+# 3. Mettre host: bedrock.<ip-avec-tirets>.sslip.io dans apps/bedrock/values.yaml
+git commit -am "bedrock: host" && git push
+#    Argo CD : certificat (~1 min) puis job wordpress-install
+kubectl -n bedrock get pods,mariadb,certificate,job
+
+# 4. Site et admin (utilisateur demo, mot de passe BEDROCK_WP_ADMIN_PASSWORD)
+#    https://bedrock.<ip-avec-tirets>.sslip.io/wp/wp-admin/
+
+# 5. Interface Argo CD sur http://localhost:8080 (utilisateur admin)
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d | pbcopy
+kubectl -n argocd port-forward svc/argocd-server 8080:80
+
+# 6. Fin de séance : tout détruire, vérifier, remettre host à vide
+terraform -chdir=bedrock destroy
+TF_VAR_prefix=bedrock python3 scripts/check-leftovers.py   # "nothing left" ; relancer si INCOMPLETE
+sed -i '' 's/^host: .*/host: ""/' apps/bedrock/values.yaml && git commit -am "bedrock: reset host" && git push
+```
+
+Démo de l'autoréparation : supprimer le **pod** `bedrock-db-0`, pas son volume
+(voir « Pièges vus en démo »).
+
 | Swarm (`docker-swarm`) | Kubernetes (ici) |
 |---|---|
 | `./swarm create`, scripts API OVH | `terraform apply` (module `k8s-stack`) |
