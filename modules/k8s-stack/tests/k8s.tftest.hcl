@@ -90,7 +90,7 @@ run "argocd_application" {
     error_message = "Application deploys the web chart"
   }
   assert {
-    condition     = contains(yamldecode(helm_release.apps.values[0]).applications.web.finalizers, "resources-finalizer.argocd.argoproj.io")
+    condition     = contains(yamldecode(helm_release.apps.values[0]).applications.web.finalizers, "resources-finalizer.argocd.argoproj.io/background")
     error_message = "deleting the Application deletes the Service and its load balancer"
   }
   assert {

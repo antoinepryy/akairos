@@ -90,6 +90,12 @@ Suivre : `kubectl -n bedrock get pods,mariadb,certificate,job`. Interface Argo C
   ReplicaSet et Pod sont donc dans la liste du projet (jamais dans le chart),
   sinon aucun pod n'apparaît.
 
+- Destroy du 23/11/2026 : bloqué une fois (MariaDB en suppression
+  « foreground », l'opérateur recréait son StatefulSet), débloqué en retirant
+  le finalizer `foregroundDeletion` de `mariadb/bedrock-db` ; volumes et load
+  balancer bien supprimés, `check-leftovers` : nothing left. L'Application
+  supprime maintenant en arrière-plan (`.../background`) pour l'éviter.
+
 ## Si une synchro reste bloquée
 
 Argo CD attend la fin du job `wordpress-install` (hook PostSync) avant de

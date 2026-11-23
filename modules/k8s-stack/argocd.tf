@@ -74,7 +74,11 @@ locals {
       (var.app_name) = {
         namespace = "argocd"
         # Deleting the Application deletes what it deployed (Service and LB included).
-        finalizers = ["resources-finalizer.argocd.argoproj.io"]
+        # Background, not foreground: with foreground deletion a custom resource
+        # whose operator keeps re-creating its children (MariaDB and its
+        # StatefulSet, seen live) never finishes deleting. The destroy guard
+        # still waits for the load balancers and volumes themselves.
+        finalizers = ["resources-finalizer.argocd.argoproj.io/background"]
         project    = var.app_name
         source = {
           repoURL        = var.git_repo_url
