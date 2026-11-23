@@ -1,0 +1,81 @@
+# Nothing reaches the pods of this namespace unless a policy below allows it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# WordPress: HTTP from Traefik only (the load balancer ends on Traefik).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wordpress-from-traefik
+spec:
+  podSelector:
+    matchLabels: { app: wordpress }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ .Values.ingressNamespace }} }
+      ports:
+        - { port: 8080, protocol: TCP }
+---
+# Let's Encrypt reaches cert-manager's temporary solver through Traefik.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: acme-solver-from-traefik
+spec:
+  podSelector:
+    matchLabels: { acme.cert-manager.io/http01-solver: "true" }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ .Values.ingressNamespace }} }
+      ports:
+        - { port: 8089, protocol: TCP }
+---
+# Redis: from WordPress and the install job.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-from-wordpress
+spec:
+  podSelector:
+    matchLabels: { app: redis }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: In, values: [wordpress, wordpress-install] }
+      ports:
+        - { port: 6379, protocol: TCP }
+---
+# Galera: SQL from WordPress and the install job; every port between Galera
+# pods (replication 4567, IST 4568, SST 4444, agent) and from the operator and
+# its jobs, which drive the cluster through SQL and the agent.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: galera
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/instance: bedrock-db }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: In, values: [wordpress, wordpress-install] }
+      ports:
+        - { port: 3306, protocol: TCP }
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/instance: bedrock-db }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ .Values.operatorNamespace }} }

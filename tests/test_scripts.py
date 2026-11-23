@@ -94,6 +94,8 @@ class DestroyGuard(unittest.TestCase):
                 'case "$FAKE_MODE" in\n'
                 '  present) echo service/web ;;\n'
                 '  finalizing) case "$*" in *applications*) echo application/web ;; esac ;;\n'
+                '  volume) case "$*" in *" pv "*) echo persistentvolume/pvc-1 ;; esac ;;\n'
+                '  no-app) case "$*" in *applications*) echo "no Application expected" >&2; exit 1 ;; esac ;;\n'
                 '  absent) ;;\n'
                 '  error) echo "Unable to connect" >&2; exit 1 ;;\n'
                 "esac\n")
@@ -121,6 +123,16 @@ class DestroyGuard(unittest.TestCase):
         r = self.run_guard("error")
         self.assertEqual(r.returncode, 1)
         self.assertIn("kubectl error", r.stderr)
+
+    def test_volume_still_present_blocks_destroy(self):
+        r = self.run_guard("volume")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("persistentvolume/pvc-1", r.stderr)
+
+    def test_namespace_without_application(self):
+        r = self.run_guard("no-app", APP_NAME="", APP_NAMESPACE="traefik")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("namespace traefik", r.stdout)
 
     def test_disabled(self):
         self.assertEqual(self.run_guard("present", GUARD_ENABLED="false").returncode, 0)

@@ -1,0 +1,60 @@
+{{- if .Values.host }}
+# First WordPress install, then Redis object cache and S3 uploads. Runs after
+# every sync once the rest is healthy; each step is idempotent.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wordpress-install
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: { app: wordpress-install }
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 33
+        runAsGroup: 33
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: install
+          image: {{ .Values.wordpress.image }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              until wp db check --quiet >/dev/null 2>&1; do echo "waiting for the database"; sleep 5; done
+              if wp core is-installed; then
+                echo "WordPress already installed"
+              else
+                wp core install --url="$WP_HOME" --title="$WP_TITLE" \
+                  --admin_user="$WP_ADMIN_USER" --admin_password="$WP_ADMIN_PASSWORD" \
+                  --admin_email="$WP_ADMIN_USER@example.invalid" --skip-email
+              fi
+              wp plugin activate redis-cache s3-uploads
+              wp redis status | grep -E '^(Status|Client|Drop-in)'
+              wp s3-uploads verify
+          env:
+            {{- include "bedrock.env" . | nindent 12 }}
+            - { name: WP_TITLE, value: {{ .Values.wordpress.title | quote }} }
+            - { name: WP_ADMIN_USER, value: {{ .Values.wordpress.adminUser | quote }} }
+          envFrom:
+            # Also holds WP_ADMIN_PASSWORD.
+            - secretRef: { name: bedrock-env }
+          securityContext:
+            {{- include "bedrock.containerSecurity" . | nindent 12 }}
+            readOnlyRootFilesystem: true
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+{{- end }}

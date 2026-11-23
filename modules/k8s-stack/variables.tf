@@ -157,3 +157,9 @@ variable "destroy_guard" {
   type        = bool
   default     = true
 }
+
+variable "platform_ready" {
+  description = "Ids of releases the app needs (operators, ingress controller), installed by the caller: the Application is created after them and deleted before them."
+  type        = list(string)
+  default     = []
+}

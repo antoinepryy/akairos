@@ -3,6 +3,21 @@
 Versions of the modules (`modules/vm-stack`, `modules/k8s-stack`) that client
 repositories pin with `?ref=vX.Y.Z`.
 
+## Unreleased (branch bedrock)
+
+- `k8s-stack`: `platform_ready`, ids of releases the caller installs for the
+  app (operators, ingress controller): the Application comes after them and
+  is deleted before them. Output `api_ready` to install them once the nodes
+  are up.
+- `k8s-stack`: the destroy guard also waits for the namespace's
+  PersistentVolumeClaims and PersistentVolumes (OVH block storage), and can
+  watch a namespace without Application (`APP_NAME=""`).
+- `bedrock/`: the docker-swarm Bedrock demo on Kubernetes (Traefik,
+  cert-manager, mariadb-operator Galera), chart `apps/bedrock`, image built
+  by GitHub Actions. Checked on a local kind cluster under Pod Security
+  restricted; not yet run at OVH.
+- `check-leftovers`: also reports `pvc-*` volumes.
+
 ## v1.1.0 (2026-11-11)
 
 Cluster hardening (audit follow-up). Checked on a local kind cluster, then live

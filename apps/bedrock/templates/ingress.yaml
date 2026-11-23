@@ -1,0 +1,46 @@
+{{- if .Values.host }}
+# Let's Encrypt account of this namespace. cert-manager answers the HTTP-01
+# challenge with a temporary pod and Ingress (see networkpolicy.yaml).
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: {{ .Values.acmeServer }}
+    privateKeySecretRef: { name: letsencrypt-account }
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik
+---
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress
+  annotations:
+    {{- if .Values.host }}
+    cert-manager.io/issuer: letsencrypt
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    {{- else }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    {{- end }}
+spec:
+  ingressClassName: traefik
+  {{- if .Values.host }}
+  tls:
+    - hosts: [{{ .Values.host | quote }}]
+      secretName: wordpress-tls
+  {{- end }}
+  rules:
+    - {{- if .Values.host }}
+      host: {{ .Values.host | quote }}
+      {{- end }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: wordpress, port: { name: http } }

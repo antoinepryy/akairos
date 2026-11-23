@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["host", "acmeServer", "wordpress", "redis", "galera", "s3", "ingressNamespace", "operatorNamespace"],
+  "properties": {
+    "host": {
+      "type": "string",
+      "pattern": "^$|^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+      "description": "Empty until the load balancer IP is known, then e.g. bedrock.203-0-113-7.sslip.io."
+    },
+    "acmeServer": { "type": "string", "pattern": "^https://" },
+    "wordpress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "replicas", "title", "adminUser"],
+      "properties": {
+        "image": { "type": "string", "minLength": 1 },
+        "replicas": {
+          "type": "integer", "minimum": 2, "maximum": 20,
+          "description": "At least 2: the PDB lets one pod go during a drain."
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "adminUser": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{2,30}$" }
+      }
+    },
+    "redis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image"],
+      "properties": { "image": { "type": "string", "minLength": 1 } }
+    },
+    "galera": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replicas", "storageSize", "antiAffinity", "operatorImage"],
+      "properties": {
+        "replicas": {
+          "type": "integer", "enum": [3, 5],
+          "description": "Odd: a majority must survive to keep writing."
+        },
+        "storageSize": { "type": "string", "pattern": "^[0-9]+Gi$" },
+        "antiAffinity": { "type": "boolean" },
+        "operatorImage": { "type": "string", "pattern": "^[^:]+:[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }
+    },
+    "s3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bucket", "prefix", "region", "endpoint"],
+      "properties": {
+        "bucket": { "type": "string", "minLength": 3 },
+        "prefix": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "region": { "type": "string", "minLength": 1 },
+        "endpoint": { "type": "string", "pattern": "^https://" }
+      }
+    },
+    "ingressNamespace": { "type": "string", "minLength": 1 },
+    "operatorNamespace": { "type": "string", "minLength": 1 }
+  }
+}

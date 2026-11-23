@@ -1,0 +1,46 @@
+# Edit, commit, push: Argo CD rolls it out within ~30 s.
+
+# Public name of the site. Empty on the first sync: the site answers in plain
+# HTTP on the load balancer's IP, without installing WordPress. Once the IP is
+# known (bedrock/README.md), set bedrock.<ip-with-dashes>.sslip.io and push:
+# cert-manager gets a Let's Encrypt certificate and the install job runs.
+host: ""
+
+# Let's Encrypt production by default. Staging (untrusted certificates, much
+# higher rate limits) while trying things out:
+#   https://acme-staging-v02.api.letsencrypt.org/directory
+acmeServer: https://acme-v02.api.letsencrypt.org/directory
+
+wordpress:
+  # Built by .github/workflows/bedrock-image.yml from images/bedrock-site.
+  # The tag is the short commit sha: change it to roll out a new image.
+  image: ghcr.io/antoinepryy/akairos-bedrock-site:latest
+  replicas: 3
+  title: Bedrock sur Kubernetes
+  adminUser: demo
+
+redis:
+  image: redis:8.2-alpine
+
+galera:
+  # Three copies kept in sync; the cluster keeps writing with any two.
+  replicas: 3
+  storageSize: 2Gi
+  # One Galera pod per node. Off only on a single-node test cluster (kind).
+  antiAffinity: true
+  # Image of the Galera init and agent containers: the operator's own image,
+  # same version as the mariadb-operator chart in bedrock/variables.tf.
+  operatorImage: ghcr.io/mariadb-operator/mariadb-operator:26.10.2
+
+# Media: same bucket as the Swarm demo, own prefix (the two sites do not mix).
+s3:
+  bucket: dna-demo-bedrock-media
+  prefix: k8s
+  region: sbg
+  endpoint: https://s3.sbg.io.cloud.ovh.net
+
+# Namespace of the Traefik pods (installed by bedrock/main.tf): the only source
+# allowed to reach WordPress and the ACME solver.
+ingressNamespace: traefik
+# Namespace of mariadb-operator: allowed to reach the Galera pods.
+operatorNamespace: mariadb-operator

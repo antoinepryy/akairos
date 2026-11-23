@@ -1,0 +1,4 @@
+#!/bin/sh
+# wp-cli wrapper. `kubectl exec` keeps the pod's environment (envFrom), so the
+# secrets are already there.
+exec php /usr/local/lib/wp-cli.phar "$@"

@@ -63,6 +63,7 @@ def main():
         "ssh key": f"{base}/sshkey",
         "gateway": f"{base}/region/{REGION}/gateway",
         "load balancer": f"{base}/region/{REGION}/loadbalancing/loadbalancer",
+        "volume": f"{base}/volume",
     }
     left = []
     for kind, path in checks.items():
@@ -72,7 +73,9 @@ def main():
                 continue
             # "kube_service_*": default name of a load balancer created by
             # Kubernetes (level 2) when the Service sets no explicit name.
-            if str(item.get("name", "")).startswith((PREFIX, "kube_service")):
+            # "pvc-*": block storage volume created by Kubernetes for a
+            # PersistentVolumeClaim (the bedrock demo's Galera disks).
+            if str(item.get("name", "")).startswith((PREFIX, "kube_service", "pvc-")):
                 left.append(f"{kind}: {item.get('name')} ({item.get('id')})")
     # Managed Kubernetes clusters (level 2): the list holds ids only.
     for kube_id in get(f"{base}/kube"):

@@ -135,6 +135,11 @@ resource "terraform_data" "wait_app_gone" {
     enabled   = var.destroy_guard
     namespace = var.app_namespace
     app       = var.app_name
+    # Ids of what the app needs on the cluster (operators, ingress controller)
+    # installed by the calling configuration: the guard, and so the
+    # Application, comes after them and goes before them. An operator removed
+    # first would leave its resources stuck on their finalizers.
+    platform = var.platform_ready
   }
 
   provisioner "local-exec" {

@@ -1,0 +1,8 @@
+apiVersion: v2
+name: bedrock
+description: >-
+  WordPress Bedrock (stateless, 3 replicas) on MariaDB Galera managed by
+  mariadb-operator, Redis object cache, media on S3, HTTPS through Traefik
+  and cert-manager. Port of the docker-swarm demo. Deployed by Argo CD.
+type: application
+version: 1.0.0

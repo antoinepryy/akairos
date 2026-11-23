@@ -22,3 +22,8 @@ output "gateway_ip" {
 output "argocd_app" {
   value = "${var.git_repo_url} @ ${var.git_revision}, path ${var.app_path}"
 }
+
+output "api_ready" {
+  description = "Known once the nodes are up and the API restricted: what the caller installs on the cluster depends on it."
+  value       = ovh_cloud_project_kube_iprestrictions.api.id
+}

@@ -1,0 +1,9 @@
+.env
+.env.*
+vendor
+web/wp
+web/app/plugins/*/
+web/app/themes/*/
+web/app/uploads
+tests
+.git

@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+spec:
+  replicas: {{ .Values.wordpress.replicas }}
+  selector:
+    matchLabels: { app: wordpress }
+  strategy:
+    # Never below the requested capacity: one extra pod first, then one old pod out.
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  template:
+    metadata:
+      labels: { app: wordpress }
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: wordpress }
+      terminationGracePeriodSeconds: 30
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 33
+        runAsGroup: 33
+        fsGroup: 33
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: wordpress
+          image: {{ .Values.wordpress.image }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            {{- include "bedrock.env" . | nindent 12 }}
+          # DB_PASSWORD, salts, S3 keys: created by scripts/bedrock-secrets.sh, never in git.
+          envFrom:
+            - secretRef: { name: bedrock-env }
+          # 503 until the pod has served a first page (warm OPcache), see healthz.php.
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 3
+            failureThreshold: 2
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          livenessProbe:
+            tcpSocket: { port: http }
+            periodSeconds: 10
+          lifecycle:
+            # Let endpoints and Traefik forget the pod before Apache stops.
+            preStop:
+              exec: { command: ["sleep", "5"] }
+          securityContext:
+            {{- include "bedrock.containerSecurity" . | nindent 12 }}
+            readOnlyRootFilesystem: true
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { memory: 384Mi }
+          volumeMounts:
+            # Read-only image: Apache's pid, lock and temp files.
+            - { name: tmp, mountPath: /tmp }
+            - { name: apache-run, mountPath: /var/run/apache2 }
+            - { name: apache-lock, mountPath: /var/lock/apache2 }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+        - name: apache-run
+          emptyDir: { sizeLimit: 1Mi }
+        - name: apache-lock
+          emptyDir: { sizeLimit: 1Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+spec:
+  selector: { app: wordpress }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+# "kubectl drain" of a node may not take the site below this.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: wordpress
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: { app: wordpress }

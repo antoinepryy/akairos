@@ -236,3 +236,14 @@ run "argocd_network_policies" {
     error_message = "default deny plus argocd-server reachable from its namespace only"
   }
 }
+
+run "application_after_platform" {
+  command = plan
+  variables {
+    platform_ready = ["traefik-id", "operator-id"]
+  }
+  assert {
+    condition     = terraform_data.wait_app_gone.input.platform == tolist(["traefik-id", "operator-id"])
+    error_message = "the guard (so the Application) depends on the caller's platform releases"
+  }
+}
