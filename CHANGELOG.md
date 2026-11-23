@@ -15,7 +15,8 @@ repositories pin with `?ref=vX.Y.Z`.
 - `bedrock/`: the docker-swarm Bedrock demo on Kubernetes (Traefik,
   cert-manager, mariadb-operator Galera), chart `apps/bedrock`, image built
   by GitHub Actions. Checked on a local kind cluster under Pod Security
-  restricted; not yet run at OVH.
+  restricted, then live at OVH SBG5 on 2026-11-23 (3 x d2-8): HTTPS,
+  network policies enforced, Galera primary failover under traffic 208/210.
 - `check-leftovers`: also reports `pvc-*` volumes.
 
 ## v1.1.0 (2026-11-11)

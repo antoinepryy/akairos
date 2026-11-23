@@ -67,6 +67,32 @@ Suivre : `kubectl -n bedrock get pods,mariadb,certificate,job`. Interface Argo C
 | Isolation | `kubectl run t --rm -it --image=busybox -- nc -zv redis.bedrock 6379` | refusé : seuls WordPress et le job parlent à Redis |
 | Règles du projet | un `Role` ou un pod root ajouté au chart | Argo CD et Pod Security refusent |
 
+## Mesures du 23/11/2026 (SBG5, 3 × d2-8)
+
+- Cluster et plateforme : ~12 min (un 2e `apply` après correction des valeurs
+  Traefik). Galera prêt ~3 min après la synchro, certificat Let's Encrypt
+  obtenu en ~1 min, installation WordPress, Redis et S3 vérifiés.
+- Répartition : 3 pods WordPress différents sur 6 requêtes.
+- Isolation : depuis le namespace `default`, Redis, WordPress et Galera ne
+  répondent pas (NetworkPolicies appliquées chez OVH).
+- Suppression du pod d'écriture `bedrock-db-0` sous trafic (une requête toutes
+  les 0,3 s pendant 2 min) : 208 réponses 200 sur 210, une 500 et un timeout
+  pendant la bascule ; `bedrock-db-1` devient le nœud d'écriture, `bedrock-db-0`
+  revient seul en ~1 min 30.
+
+## Si une synchro reste bloquée
+
+Argo CD attend la fin du job `wordpress-install` (hook PostSync) avant de
+terminer une synchro, et une synchro en cours garde sa révision : un job qui
+boucle bloque les commits suivants. Le job échoue maintenant au bout de
+15 min ; pour débloquer tout de suite :
+
+```bash
+kubectl -n argocd patch application bedrock --type merge -p '{"status":{"operationState":{"phase":"Terminating"}}}'
+kubectl -n bedrock patch job wordpress-install --type=json -p='[{"op":"remove","path":"/metadata/finalizers"}]'
+kubectl -n argocd patch application bedrock --type merge -p "{\"operation\":{\"sync\":{\"revision\":\"$(git rev-parse HEAD)\"}}}"
+```
+
 ## Nouvelle image
 
 Modifier `images/bedrock-site`, push : le workflow `bedrock-image` publie
