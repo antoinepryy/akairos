@@ -119,7 +119,7 @@ resource "helm_release" "traefik" {
       # Kubernetes asks OVH for an Octavia load balancer with a floating IP.
       annotations = { "loadbalancer.ovhcloud.com/flavor" = "small" }
     }
-    logs = { access = { enabled = true } }
+    accessLog = { enabled = true }
   })]
 
   depends_on = [terraform_data.traefik_lb_gone]

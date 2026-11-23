@@ -4,7 +4,7 @@
 # HTTP on the load balancer's IP, without installing WordPress. Once the IP is
 # known (bedrock/README.md), set bedrock.<ip-with-dashes>.sslip.io and push:
 # cert-manager gets a Let's Encrypt certificate and the install job runs.
-host: ""
+host: bedrock.178-33-184-145.sslip.io
 
 # Let's Encrypt production by default. Staging (untrusted certificates, much
 # higher rate limits) while trying things out:
