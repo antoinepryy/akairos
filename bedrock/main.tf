@@ -19,6 +19,10 @@ locals {
     { group = "", kind = "PersistentVolumeClaim" },
     { group = "apps", kind = "Deployment" },
     { group = "apps", kind = "StatefulSet" },
+    # Never in the chart, but Argo CD hides from its UI every kind its project
+    # does not allow, pods included (found live): needed to see them.
+    { group = "apps", kind = "ReplicaSet" },
+    { group = "", kind = "Pod" },
     { group = "batch", kind = "Job" },
     { group = "batch", kind = "CronJob" },
     { group = "policy", kind = "PodDisruptionBudget" },

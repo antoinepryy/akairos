@@ -80,6 +80,16 @@ Suivre : `kubectl -n bedrock get pods,mariadb,certificate,job`. Interface Argo C
   pendant la bascule ; `bedrock-db-1` devient le nœud d'écriture, `bedrock-db-0`
   revient seul en ~1 min 30.
 
+## Pièges vus en démo
+
+- Supprimer un **volume** (PVC) de Galera dans Argo CD ne le recrée pas : un
+  volume monté reste « Terminating » tant que son pod tourne. Pour montrer
+  l'autoréparation, supprimer le **pod** (`bedrock-db-0`) ; le volume se
+  libère alors et le StatefulSet recrée volume et pod.
+- Argo CD masque de son interface les types que son projet n'autorise pas :
+  ReplicaSet et Pod sont donc dans la liste du projet (jamais dans le chart),
+  sinon aucun pod n'apparaît.
+
 ## Si une synchro reste bloquée
 
 Argo CD attend la fin du job `wordpress-install` (hook PostSync) avant de
