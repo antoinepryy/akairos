@@ -13,8 +13,9 @@ acmeServer: https://acme-v02.api.letsencrypt.org/directory
 
 wordpress:
   # Built by .github/workflows/bedrock-image.yml from images/bedrock-site.
-  # The tag is the short commit sha: change it to roll out a new image.
-  image: ghcr.io/antoinepryy/akairos-bedrock-site:latest
+  # Tag = short commit sha, pinned by digest: every node runs exactly the
+  # same image. Change both to roll out a new one (bedrock/README.md).
+  image: ghcr.io/antoinepryy/akairos-bedrock-site:bc05e12@sha256:b396ff7fe826aa8665b2755b2373745270a4c822247abdc2c6823c7290c96d0b
   replicas: 3
   title: Bedrock sur Kubernetes
   adminUser: demo
